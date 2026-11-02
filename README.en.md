@@ -10,6 +10,28 @@ Get the Windows installer from the [latest release](https://github.com/chojema/c
 
 The installer is not code signed, so Windows SmartScreen may warn you the first time you run it. Select `More info`, then `Run anyway`, to install.
 
+## Screenshots
+
+All three screenshots show v0.3.0 running on Windows. The Windows and Mac choices in the interface refer to the key labels and keyboard layout used in the output.
+
+**Compare key combinations**
+
+View Windows and Mac keycaps for `Ctrl + C` side by side, with Hangul letters and text results.
+
+![The Windows v0.3.0 app showing Windows and Mac keycaps for Ctrl + C side by side](screenshot/2026-11-02_11-24-35.png)
+
+**Full keyboard in 3D**
+
+View the complete Windows keyboard in 3D, using the Korean layout with Hangul letters.
+
+![The Windows v0.3.0 app showing a full Windows keyboard in 3D](screenshot/2026-11-02_11-25-27.png)
+
+**Full keyboard in 2D**
+
+View the complete Mac keyboard as a flat image. Under Keyboard, choose Full, then set Appearance to 2D.
+
+![The Windows v0.3.0 app showing a full Mac keyboard with Hangul letters in 2D](screenshot/2026-11-02_11-26-05.png)
+
 ## Features
 
 - **Key entry:** Type `C`, `Ctrl + Shift + Z`, or `⌘⇧Z`, press the keys, or choose them on an on-screen keyboard.
