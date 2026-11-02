@@ -220,6 +220,72 @@ describe("buildScene", () => {
   });
 });
 
+describe("full keyboard", () => {
+  const options = (highlight: boolean, numpad = false) => ({ keyboard: { enabled: true, numpad, highlight } });
+  const face = /<path fill="(#[0-9a-f]{6})" stroke=/g;
+  it("draws without any chosen key", () => {
+    const { svg, caps } = buildScene(spec("", options(true)), font);
+    expect(caps).toHaveLength(0);
+    expect(svg).not.toMatch(/NaN|Infinity/);
+    expect(svg.length).toBeGreaterThan(50000);
+    expect(svg).not.toContain("ks-mask");
+    expect(svg).not.toContain("feGaussianBlur stdDeviation=\"7");
+  });
+  it("adds the number pad only when asked", () => {
+    const off = buildScene(spec("", options(true)), font);
+    const on = buildScene(spec("", options(true, true)), font);
+    expect(on.width).toBeGreaterThan(off.width + 300);
+    expect(layoutKeys("ansi", "windows", true).filter((k) => k.code.startsWith("num"))).toHaveLength(17);
+    expect(layoutKeys("ansi", "windows").some((k) => k.code.startsWith("num"))).toBe(false);
+  });
+  it("keeps number pad rows inside the keyboard and free of overlaps", () => {
+    const keys = layoutKeys("ansi", "windows", true);
+    for (const a of keys) {
+      for (const b of keys) {
+        if (a === b) continue;
+        const overlap = a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+        expect(overlap, `${a.code} ${b.code}`).toBe(false);
+      }
+    }
+    expect(Math.max(...keys.map((k) => k.y + k.h))).toBe(6.25);
+  });
+  it("highlights chosen keys only when asked", () => {
+    const colours = (svg: string) => new Set([...svg.matchAll(face)].map((m) => m[1]));
+    const blue = (hex: string) => parseInt(hex.slice(5, 7), 16) - parseInt(hex.slice(1, 3), 16) > 40;
+    const on = [...colours(buildScene(spec("Ctrl + C", options(true)), font).svg)].some((c) => blue(c!));
+    const off = [...colours(buildScene(spec("Ctrl + C", options(false)), font).svg)].some((c) => blue(c!));
+    expect(on).toBe(true);
+    expect(off).toBe(false);
+  });
+  it("shows Mac keys, jamo, and keeps its frame while pressed", () => {
+    const base = spec("C", options(true));
+    const windows = buildScene(base, font);
+    const mac = buildScene({ ...base, platform: "mac" }, font);
+    expect(mac.svg).not.toEqual(windows.svg);
+    const jamo = buildScene({ ...base, style: { ...base.style, jamo: true } }, font);
+    expect(jamo.svg).toContain("fill-opacity");
+    const pressed = buildScene(base, font, [1]);
+    expect(pressed.viewBox).toEqual(windows.viewBox);
+    expect(pressed.svg).not.toEqual(windows.svg);
+  });
+  it("keeps its filter when drawn again from the cache", () => {
+    const base = spec("C", options(true));
+    buildScene(base, font);
+    expect(buildScene(base, font).svg).toContain('id="ks-shadow"');
+  });
+  it("exports animation of the chosen keys", () => {
+    const svg = animatedSvg(spec("Ctrl + C", options(true)), font, { travel: 100, stagger: 50, hold: 200, pause: 300 });
+    expect(svg).toContain("@keyframes k1m");
+  });
+  it("reads number pad names back as the same key", () => {
+    for (const text of ["Num1", "NumEnter", "NumAdd", "NumLock"]) {
+      expect(comboToText(parseCombo(text))).toBe(text);
+    }
+    expect(codeFromEvent("Numpad5")).toBe("num5");
+    expect(codeFromEvent("NumpadEnter")).toBe("numenter");
+  });
+});
+
 describe("animation", () => {
   const motion = { travel: 100, stagger: 50, hold: 200, pause: 300 };
   it("presses in order, releases in reverse, and ends at rest", () => {

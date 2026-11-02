@@ -19,6 +19,7 @@ The installer is not code signed, so Windows SmartScreen may warn you the first 
 - **Text results:** Copy text such as `[Ctrl]+[Shift]+[Z]`, `⊞+[E]`, and `⌃⇧Z` into documents, separately or together.
 - **2D images:** Copy or save flat keycap PNGs that fit inside a sentence.
 - **Surrounding keys:** Optionally show nearby keys with blurred edges, on ANSI, ISO, and Korean layouts.
+- **Full keyboard (coming in the next release):** Create images and animations of the whole keyboard, as is or with chosen keys highlighted. Choose Windows or Mac keys, and whether to include the number pad.
 - **Hangul letters:** Show Latin and Hangul letters together, arranged for Windows or Mac.
 - **Animation:** Save key presses as HTML, GIF, or APNG.
 

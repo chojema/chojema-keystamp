@@ -54,8 +54,20 @@ const ROWS: Record<LayoutId, string[]> = {
 // Mac keyboards place command next to the space bar.
 const MAC_SWAP: Record<string, string> = { lmeta: "lalt", lalt: "lmeta", rmeta: "ralt", ralt: "rmeta" };
 
-export function layoutKeys(id: LayoutId, platform: Platform): PlacedKey[] {
+const NUMPAD_X = 18.5;
+const NUMPAD: [string, number, number, number, number][] = [
+  ["numlock", 0, 0, 1, 1], ["numdiv", 1, 0, 1, 1], ["nummul", 2, 0, 1, 1], ["numsub", 3, 0, 1, 1],
+  ["num7", 0, 1, 1, 1], ["num8", 1, 1, 1, 1], ["num9", 2, 1, 1, 1], ["numadd", 3, 1, 1, 2],
+  ["num4", 0, 2, 1, 1], ["num5", 1, 2, 1, 1], ["num6", 2, 2, 1, 1],
+  ["num1", 0, 3, 1, 1], ["num2", 1, 3, 1, 1], ["num3", 2, 3, 1, 1], ["numenter", 3, 3, 1, 2],
+  ["num0", 0, 4, 2, 1], ["numdec", 2, 4, 1, 1],
+];
+
+export function layoutKeys(id: LayoutId, platform: Platform, numpad = false): PlacedKey[] {
   const placed: PlacedKey[] = [];
+  if (numpad) {
+    for (const [code, x, y, w, h] of NUMPAD) placed.push({ code, x: NUMPAD_X + x, y: 1.25 + y, w, h });
+  }
   ROWS[id].forEach((row, rowIndex) => {
     // The function row sits a quarter unit above the main block.
     const y = rowIndex === 0 ? 0 : rowIndex + 0.25;

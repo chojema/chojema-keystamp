@@ -86,6 +86,29 @@ export interface CapMesh {
   legendD: number;
 }
 
+/** The low body a whole keyboard sits on. */
+export function buildCase(cx: number, cy: number, w: number, d: number): { base: Vec3[]; quads: Vec3[][]; top: Vec3[] } {
+  const rings: Ring[] = [
+    { inset: 0, z: -36 },
+    { inset: 1.5, z: -10 },
+    { inset: 4, z: -6 },
+    { inset: 8, z: -5 },
+  ];
+  const loops = rings.map((ring) =>
+    outline(cx, cy, w - ring.inset * 2, d - ring.inset * 2, Math.max(4, 22 - ring.inset), 6).map(([x, y]): Vec3 => [x, y, ring.z]),
+  );
+  const quads: Vec3[][] = [];
+  for (let i = 0; i < loops.length - 1; i++) {
+    const a = loops[i];
+    const b = loops[i + 1];
+    for (let j = 0; j < a.length; j++) {
+      const n = (j + 1) % a.length;
+      quads.push([a[j], a[n], b[n], b[j]]);
+    }
+  }
+  return { base: loops[0], quads, top: loops[loops.length - 1] };
+}
+
 export interface PlusMesh {
   base: Vec3[];
   quads: Vec3[][];

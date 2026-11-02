@@ -1,7 +1,7 @@
 import type { Font } from "opentype.js";
 import { isModifier, legendFor, rowWidth, type KeyRef, type Legend, type Platform } from "./keys";
 import { layoutKeys, type LayoutId } from "./layouts";
-import { buildCap, buildPlus, keyTravel, UNIT, type CapMesh, type Profile, type Vec3 } from "./mesh";
+import { buildCap, buildCase, buildPlus, keyTravel, UNIT, type CapMesh, type Profile, type Vec3 } from "./mesh";
 
 export interface View {
   /** Degrees away from straight down: 0 is the top view. */
@@ -32,7 +32,16 @@ export interface ContextOptions {
   blur: number;
 }
 
+export interface KeyboardOptions {
+  /** Show the whole keyboard rather than only the chosen keys. */
+  enabled: boolean;
+  numpad: boolean;
+  /** Colour the chosen keys and quieten all the others. */
+  highlight: boolean;
+}
+
 export interface SceneSpec {
+  keyboard?: KeyboardOptions;
   keys: KeyRef[];
   platform: Platform;
   view: View;
@@ -183,8 +192,29 @@ function placeRow(spec: SceneSpec): { keys: KeyInstance[]; plus: Vec3[] } {
   return { keys, plus };
 }
 
+function placeFull(spec: SceneSpec): KeyInstance[] {
+  const layout = layoutKeys(spec.context.layout, spec.platform, spec.keyboard?.numpad ?? false);
+  const wanted = new Set(spec.keys.map((k) => k.code));
+  const maxX = Math.max(...layout.map((k) => k.x + k.w));
+  const maxY = Math.max(...layout.map((k) => k.y + k.h));
+  const out: KeyInstance[] = layout.map((k) => ({ ...k, selected: wanted.has(k.code), distance: 0 }));
+
+  // Custom labels and keys missing from this layout sit in a row under the keyboard.
+  let x = 0;
+  for (const k of spec.keys) {
+    if (layout.some((placed) => placed.code === k.code)) continue;
+    const w = rowWidth(k.code);
+    out.push({ code: k.code, x, y: maxY + 0.5, w, h: 1, selected: true, distance: 0 });
+    x += w + 0.1;
+  }
+  return out.map((k) => ({ ...k, x: k.x - maxX / 2, y: k.y - maxY / 2 }));
+}
+
+/** Keeps the keyboard's unmoving keys ready, so animation frames only redraw pressed keys. */
+const keyboardCache = new Map<string, { backdrop: string; foreground: string; x0: number; y0: number; x1: number; y1: number }>();
+
 function placeInLayout(spec: SceneSpec): KeyInstance[] | null {
-  const layout = layoutKeys(spec.context.layout, spec.platform);
+  const layout = layoutKeys(spec.context.layout, spec.platform, spec.keyboard?.numpad ?? false);
   const wanted = new Set(spec.keys.map((k) => k.code));
   const chosen = layout.filter((k) => wanted.has(k.code));
   if (chosen.length === 0) return null;
@@ -359,7 +389,8 @@ const TINT = 0.55;
 
 /** Renders a scene. `press` holds a 0-1 amount per key in `spec.keys`. */
 export function buildScene(spec: SceneSpec, font: Font, press: number[] = []): RenderedScene {
-  const layoutPlaced = spec.context.enabled ? placeInLayout(spec) : null;
+  const full = spec.keyboard?.enabled ?? false;
+  const layoutPlaced = full ? placeFull(spec) : spec.context.enabled ? placeInLayout(spec) : null;
   const { keys, plus } = layoutPlaced ? { keys: layoutPlaced, plus: [] as Vec3[] } : placeRow(spec);
 
   const extent = keys.reduce((m, k) => Math.max(m, Math.abs(k.x), Math.abs(k.x + k.w), Math.abs(k.y), Math.abs(k.y + k.h)), 0) * UNIT * 2;
@@ -379,9 +410,56 @@ export function buildScene(spec: SceneSpec, font: Font, press: number[] = []): R
   let backdrop = "";
   let foreground = "";
 
-  /* Surrounding keys: blur grows with distance, and the outer edge fades away. */
   const others = keys.filter((k) => !k.selected).sort((a, b) => depthOf(a) - depthOf(b));
-  if (others.length > 0) {
+  const emphasise = full && (spec.keyboard?.highlight ?? false) && keys.some((k) => k.selected);
+
+  /* The whole keyboard, sharp and in depth order, on its body. */
+  if (full) {
+    const cacheKey = JSON.stringify(spec);
+    let cached = keyboardCache.get(cacheKey);
+    if (!cached) {
+      const region = new Bounds();
+      const ex0 = Math.min(...keys.map((k) => k.x)) * UNIT;
+      const ex1 = Math.max(...keys.map((k) => k.x + k.w)) * UNIT;
+      const ey0 = Math.min(...keys.map((k) => k.y)) * UNIT;
+      const ey1 = Math.max(...keys.map((k) => k.y + k.h)) * UNIT;
+      const body = buildCase((ex0 + ex1) / 2, (ey0 + ey1) / 2, ex1 - ex0 + 44, ey1 - ey0 + 44);
+      const bodyColor = mix(modBase, [0, 0, 0], 0.5);
+      let cachedBackdrop = "";
+      if (spec.shadow) {
+        const pts = body.base.map(([x, y]) => camera.project([x + 8, y + 12, -36]));
+        pts.forEach((p) => region.add(p, 30));
+        defs += `<filter id="ks-shadow" x="-10%" y="-20%" width="120%" height="140%"><feGaussianBlur stdDeviation="12"/></filter>`;
+        cachedBackdrop += `<path d="${pathOf(pts)}" fill="#000" fill-opacity=".34" filter="url(#ks-shadow)"/>`;
+      }
+      cachedBackdrop += capFaces(body, bodyColor, camera, 0, region);
+      const chosenKeys = keys.filter((k) => k.selected);
+      let cachedForeground = "";
+      for (const k of others) {
+        const mesh = meshOf(k, "lite");
+        const color = emphasise ? mix(colorOf(k.code), bodyColor, 0.3) : colorOf(k.code);
+        const ink = emphasise ? toHex(mix(parseHex(spec.style.legend), color, 0.42)) : spec.style.legend;
+        const legend = legendFor(k.code, spec.platform, spec.style.jamo);
+        const markup = capFaces(mesh, color, camera, 0, region) + legendPaths(font, legend, mesh, camera, 0, ink);
+        // A key nearer the viewer than the chosen key next to it draws over that key.
+        const near = chosenKeys.some((c) => Math.abs(c.x + c.w / 2 - (k.x + k.w / 2)) + Math.abs(c.y + c.h / 2 - (k.y + k.h / 2)) < 2.5 && depthOf(k) > depthOf(c));
+        if (near) cachedForeground += markup;
+        else cachedBackdrop += markup;
+      }
+      cached = { backdrop: cachedBackdrop, foreground: cachedForeground, x0: region.x0, y0: region.y0, x1: region.x1, y1: region.y1 };
+      if (keyboardCache.size >= 6) keyboardCache.clear();
+      keyboardCache.set(cacheKey, cached);
+    } else if (spec.shadow) {
+      defs += `<filter id="ks-shadow" x="-10%" y="-20%" width="120%" height="140%"><feGaussianBlur stdDeviation="12"/></filter>`;
+    }
+    backdrop += cached.backdrop;
+    foreground = cached.foreground;
+    bounds.add([cached.x0, cached.y0]);
+    bounds.add([cached.x1, cached.y1]);
+  }
+
+  /* Surrounding keys: blur grows with distance, and the outer edge fades away. */
+  if (!full && others.length > 0) {
     const tiers = [0.34, 0.67, 1];
     const blurAttr = tiers.map((t, i) => {
       const sd = spec.context.blur * t;
@@ -431,7 +509,7 @@ export function buildScene(spec: SceneSpec, font: Font, press: number[] = []): R
 
   const plusParts = plus.map((center) => ({ mesh: buildPlus(center[0], center[1]), depth: camera.depth(center) })).sort((a, b) => a.depth - b.depth);
 
-  if (spec.shadow && others.length === 0 && chosen.length > 0) {
+  if (!full && spec.shadow && others.length === 0 && chosen.length > 0) {
     defs += `<filter id="ks-shadow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="9"/></filter>`;
     let d = "";
     for (const { mesh } of chosen) {
@@ -459,16 +537,19 @@ export function buildScene(spec: SceneSpec, font: Font, press: number[] = []): R
     const before = takePlusBefore(depthOf(key));
     flat += before;
     const amount = press[index] ?? 0;
-    const base = colorOf(key.code);
+    const plain = colorOf(key.code);
+    const base = emphasise ? mix(plain, accent, 0.88) : plain;
+    const pressedColor = emphasise ? mix(base, [0, 0, 0], 0.28) : mix(base, accent, TINT);
+    const capInk = emphasise ? (0.299 * base[0] + 0.587 * base[1] + 0.114 * base[2] > 150 ? "#14181b" : "#ffffff") : spec.style.legend;
     const legend = legendFor(key.code, spec.platform, spec.style.jamo);
-    const draw = (color: Rgb, dz: number) => capFaces(mesh, color, camera, dz) + legendPaths(font, legend, mesh, camera, dz, spec.style.legend);
+    const draw = (color: Rgb, dz: number) => capFaces(mesh, color, camera, dz) + legendPaths(font, legend, mesh, camera, dz, capInk);
 
     // Bounds cover both resting and pressed poses so frames never shift.
     capFaces(mesh, base, camera, 0, bounds);
     capFaces(mesh, base, camera, travel, bounds);
 
     const rest = draw(base, 0);
-    flat += amount > 0 ? draw(mix(base, accent, TINT * amount), travel * amount) : rest;
+    flat += amount > 0 ? draw(mix(base, pressedColor, amount), travel * amount) : rest;
 
     const [ox, oy] = camera.project([mesh.cx, mesh.cy, mesh.height]);
     const [px, py] = camera.project([mesh.cx, mesh.cy, mesh.height - travel]);
@@ -478,7 +559,7 @@ export function buildScene(spec: SceneSpec, font: Font, press: number[] = []): R
       index,
       before,
       rest,
-      tinted: draw(mix(base, accent, TINT), 0),
+      tinted: draw(pressedColor, 0),
       originX: ox,
       originY: oy,
       offsetX: px - ox,

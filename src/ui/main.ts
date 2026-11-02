@@ -13,6 +13,7 @@ import notices from "./notices.txt?raw";
 import "./styles.css";
 
 type Display = "both" | Platform;
+type Scope = "keys" | "nearby" | "full";
 
 interface Theme {
   name: string;
@@ -55,6 +56,10 @@ const initial = {
   scale: 4,
   inlineHeight: 32,
   display: "both" as Display,
+  scope: "keys" as Scope,
+  keyboardPlatform: "windows" as Platform,
+  numpad: false,
+  highlight: true,
 };
 
 type State = typeof initial;
@@ -62,7 +67,10 @@ const STORAGE_KEY = "keystamp-settings";
 
 function loadState(): State {
   try {
-    return { ...initial, ...JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") };
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}");
+    // Earlier versions stored the surrounding keys choice as a checkbox.
+    if (saved.context && !saved.scope) saved.scope = "nearby";
+    return { ...initial, ...saved };
   } catch {
     return { ...initial };
   }
@@ -163,13 +171,17 @@ function section(title: string, ...children: Node[]) {
 
 /* scene */
 
-function sceneSpec(platform: Platform = state.platform): SceneSpec {
+const shownDisplay = (): Display => (state.scope === "full" ? state.keyboardPlatform : state.display);
+const exportPlatform = (): Platform => (state.scope === "full" ? state.keyboardPlatform : state.platform);
+
+function sceneSpec(platform: Platform = exportPlatform()): SceneSpec {
   return {
     keys,
     platform,
     view: { tilt: state.tilt, yaw: state.yaw, perspective: state.perspective },
     style: { profile: state.profile, cap: state.cap, modifier: state.modifier, legend: state.legend, accent: state.accent, jamo: state.jamo },
-    context: { enabled: state.context, layout: state.layout, reach: state.reach, blur: state.blur },
+    context: { enabled: state.scope === "nearby", layout: state.layout, reach: state.reach, blur: state.blur },
+    keyboard: { enabled: state.scope === "full", numpad: state.numpad, highlight: state.highlight },
     showPlus: state.showPlus,
     shadow: state.shadow,
     background: state.transparent ? null : state.background,
@@ -179,7 +191,7 @@ function sceneSpec(platform: Platform = state.platform): SceneSpec {
 const motion = (): Motion => ({ travel: state.travel, stagger: state.stagger, hold: state.hold, pause: state.pause });
 
 const PLATFORMS: Platform[] = ["windows", "mac"];
-const isShown = (platform: Platform) => state.display === "both" || state.display === platform;
+const isShown = (platform: Platform) => shownDisplay() === "both" || shownDisplay() === platform;
 const stage = el("div", { class: "stage", tabindex: "0", role: "img" });
 const emptyNote = el("p", { class: "empty" }, t.empty);
 const views = PLATFORMS.map((platform) => {
@@ -218,20 +230,20 @@ function draw() {
   windowsText.value = windowsResultText(keys);
   macText.value = macComboToText(keys);
   if (!font) return;
-  const empty = keys.length === 0;
+  const empty = keys.length === 0 && state.scope !== "full";
   emptyNote.hidden = !empty;
   views.forEach((view) => {
     view.pane.hidden = empty || !isShown(view.platform);
   });
   for (const platform of PLATFORMS) {
-    if (isShown(platform)) flatPreviews[platform].innerHTML = empty ? "" : flatImage(platform).svg;
+    if (isShown(platform)) flatPreviews[platform].innerHTML = keys.length === 0 ? "" : flatImage(platform).svg;
   }
   if (empty) return;
   const press = playing ? pressStates(motion(), keys.length, (performance.now() - playStart) % duration(motion(), keys.length)) : [];
   for (const view of views) {
     if (isShown(view.platform)) view.image.innerHTML = buildScene(sceneSpec(view.platform), font, press).svg;
   }
-  stage.setAttribute("aria-label", state.display === "both" ? bothToText(keys) : state.display === "windows" ? windowsText.value : macText.value);
+  stage.setAttribute("aria-label", shownDisplay() === "both" ? bothToText(keys) : shownDisplay() === "windows" ? windowsText.value : macText.value);
 }
 
 function setPlaying(next: boolean) {
@@ -355,7 +367,7 @@ const picker = el("div", { class: "picker", hidden: true });
 function syncPicker() {
   if (picker.hidden) return;
   picker.replaceChildren();
-  const placed = layoutKeys(state.layout, "windows");
+  const placed = layoutKeys(state.layout, "windows", state.numpad);
   const size = 2.6;
   for (const key of placed) {
     const label = legendFor(key.code, "windows", false).main;
@@ -389,14 +401,14 @@ function say(message: string, sticky = false) {
   if (!sticky) statusTimer = window.setTimeout(() => (status.textContent = ""), 3000);
 }
 
-function fileBase(platform: Platform = state.platform): string {
+function fileBase(platform: Platform = exportPlatform()): string {
   const text = comboToText(keys).replace(/\s*\+\s*/g, "-").replace(/[\\/:*?"<>|]/g, "_");
-  return `keystamp-${text || "key"}-${platform}`;
+  return `keystamp-${text || "keyboard"}-${platform}`;
 }
 
 async function guarded(action: () => Promise<string | null>) {
   if (!font) return;
-  if (keys.length === 0) {
+  if (keys.length === 0 && state.scope !== "full") {
     say(t.noKey);
     return;
   }
@@ -428,7 +440,14 @@ function animationFrames(): { frames: Frame[]; width: number; height: number } {
   return { frames, width, height };
 }
 
-const animationScale = () => Math.min(state.scale, 2);
+// Whole keyboards are wide, so animation frames are limited to keep files and memory reasonable.
+const animationScale = (width: number) => Math.min(state.scale, 2, 1280 / width);
+
+/** For results that only make sense once a key has been entered. */
+const requireKeys = (action: () => void) => () => {
+  if (keys.length === 0) say(t.noKey);
+  else action();
+};
 const progress = (done: number) => say(`${t.working} ${Math.round(done * 100)}%`, true);
 
 const actions = {
@@ -477,12 +496,12 @@ const actions = {
     guarded(async () => {
       const { frames, width, height } = animationFrames();
       const matte = state.transparent ? "#ffffff" : state.background;
-      return save(`${fileBase()}.gif`, await encodeGif(frames, width, height, animationScale(), matte, progress));
+      return save(`${fileBase()}.gif`, await encodeGif(frames, width, height, animationScale(width), matte, progress));
     }),
   saveApng: () =>
     guarded(async () => {
       const { frames, width, height } = animationFrames();
-      return save(`${fileBase()}.png`, await encodeApng(frames, width, height, animationScale(), progress));
+      return save(`${fileBase()}.png`, await encodeApng(frames, width, height, animationScale(width), progress));
     }),
 };
 
@@ -529,7 +548,7 @@ function themeButtons() {
 }
 
 function build() {
-  const playButton = el("button", { type: "button", class: "key", click: () => setPlaying(!playing) });
+  const playButton = el("button", { type: "button", class: "key", click: requireKeys(() => setPlaying(!playing)) });
   syncers.push(() => {
     playButton.textContent = playing ? t.stop : t.play;
     playButton.setAttribute("aria-pressed", String(playing));
@@ -538,15 +557,33 @@ function build() {
   const contextOptions = el(
     "div",
     {},
+    slider(t.reach, "reach", 0.5, 4, 0.25),
+    slider(t.blur, "blur", 0, 16, 0.5),
+  );
+  const layoutOptions = el(
+    "div",
+    {},
     segmented<LayoutId>(t.layout, [["ansi", t.ansi], ["iso", t.iso], ["korean", t.korean]], () => state.layout, (layout) => {
       update({ layout });
       syncPicker();
     }),
-    slider(t.reach, "reach", 0.5, 4, 0.25),
-    slider(t.blur, "blur", 0, 16, 0.5),
+    toggle(t.numpad, "numpad"),
   );
+  const fullOptions = el(
+    "div",
+    {},
+    segmented<Platform>(t.keyboardPlatform, [["windows", t.windows], ["mac", t.mac]], () => state.keyboardPlatform, (keyboardPlatform) => update({ keyboardPlatform })),
+    toggle(t.highlight, "highlight"),
+  );
+  let pickerNumpad = state.numpad;
   syncers.push(() => {
-    contextOptions.hidden = !state.context;
+    contextOptions.hidden = state.scope !== "nearby";
+    layoutOptions.hidden = state.scope === "keys";
+    fullOptions.hidden = state.scope !== "full";
+    if (pickerNumpad !== state.numpad) {
+      pickerNumpad = state.numpad;
+      syncPicker();
+    }
   });
 
   const noticeDialog = el(
@@ -561,12 +598,17 @@ function build() {
     bgSwatch.hidden = state.transparent;
   });
 
+  const displayChoice = segmented<Display>(t.display, [["both", t.displayAll], ["windows", t.windows], ["mac", t.mac]], () => state.display, (display) =>
+    update(display === "both" ? { display } : { display, platform: display }),
+  );
   const targetChoice = segmented<Platform>(t.platform, [["windows", t.windows], ["mac", t.mac]], () => state.platform, (platform) => update({ platform }));
-  const copyBothButton = el("button", { type: "button", class: "key", click: () => actions.copyText(() => bothToText(keys)) }, t.copyBoth);
+  const copyBothButton = el("button", { type: "button", class: "key", click: requireKeys(() => actions.copyText(() => bothToText(keys))) }, t.copyBoth);
   syncers.push(() => {
-    targetChoice.hidden = state.display !== "both";
-    copyBothButton.hidden = state.display !== "both";
-    for (const view of views) view.pane.querySelector<HTMLElement>(".pane-chip")!.hidden = state.display !== "both";
+    const both = shownDisplay() === "both";
+    displayChoice.hidden = state.scope === "full";
+    targetChoice.hidden = !both;
+    copyBothButton.hidden = !both;
+    for (const view of views) view.pane.querySelector<HTMLElement>(".pane-chip")!.hidden = !both;
   });
 
   const inspector = el(
@@ -574,9 +616,7 @@ function build() {
     { class: "inspector" },
     section(
       t.keycap,
-      segmented<Display>(t.display, [["both", t.displayAll], ["windows", t.windows], ["mac", t.mac]], () => state.display, (display) =>
-        update(display === "both" ? { display } : { display, platform: display }),
-      ),
+      displayChoice,
       targetChoice,
       segmented<Profile>(t.profile, [["sculpted", t.sculpted], ["low", t.low]], () => state.profile, (profile) => update({ profile })),
       el("div", { class: "row" }, el("span", {}, t.theme), themeButtons()),
@@ -587,7 +627,16 @@ function build() {
       toggle(t.transparent, "transparent"),
       bgSwatch,
     ),
-    section(t.surroundings, toggle(t.showSurroundings, "context"), contextOptions),
+    section(
+      t.keyboardSection,
+      segmented<Scope>(t.scope, [["keys", t.scopeKeys], ["nearby", t.scopeNearby], ["full", t.scopeFull]], () => state.scope, (scope) =>
+        // A whole keyboard reads best from the front, so it starts there.
+        update(scope === "full" && state.scope !== "full" ? { scope, tilt: 30, yaw: 0 } : { scope }),
+      ),
+      layoutOptions,
+      fullOptions,
+      contextOptions,
+    ),
     section(
       t.animation,
       slider(t.travel, "travel", 40, 400, 10, t.ms),
@@ -595,7 +644,7 @@ function build() {
       slider(t.hold, "hold", 0, 2000, 50, t.ms),
       slider(t.pause, "pause", 0, 3000, 50, t.ms),
       slider(t.fps, "fps", 10, 50, 5),
-      el("div", { class: "buttons" }, playButton, actionButton("saveHtml", actions.saveHtml), actionButton("saveGif", actions.saveGif), actionButton("saveApng", actions.saveApng)),
+      el("div", { class: "buttons" }, playButton, actionButton("saveHtml", requireKeys(actions.saveHtml)), actionButton("saveGif", requireKeys(actions.saveGif)), actionButton("saveApng", requireKeys(actions.saveApng))),
       el("p", { class: "note" }, t.gifNote),
     ),
     section(
@@ -627,10 +676,10 @@ function build() {
           { class: "result-row" },
           el("span", { class: "result-name" }, t[platform]),
           field,
-          el("button", { type: "button", class: "key", click: () => actions.copyText(() => field.value) }, t.copy),
+          el("button", { type: "button", class: "key", click: requireKeys(() => actions.copyText(() => field.value)) }, t.copy),
           flatPreviews[platform],
-          el("button", { type: "button", class: "key", click: () => actions.copyFlat(platform) }, t.copyPng),
-          el("button", { type: "button", class: "key", click: () => actions.saveFlat(platform) }, t.savePng),
+          el("button", { type: "button", class: "key", click: requireKeys(() => actions.copyFlat(platform)) }, t.copyPng),
+          el("button", { type: "button", class: "key", click: requireKeys(() => actions.saveFlat(platform)) }, t.savePng),
         );
         syncers.push(() => {
           row.hidden = !isShown(platform);

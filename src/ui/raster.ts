@@ -1,6 +1,8 @@
 import { applyPalette, GIFEncoder, quantize } from "gifenc";
 import UPNG from "upng-js";
 
+const MAX_SIDE = 8192;
+
 export interface Raster {
   canvas: HTMLCanvasElement;
   width: number;
@@ -10,8 +12,10 @@ export interface Raster {
 
 /** Draws SVG markup to pixels at a scale of the image's natural size. */
 export async function rasterize(svg: string, baseWidth: number, baseHeight: number, scale: number, matte?: string): Promise<Raster> {
-  const width = Math.max(1, Math.round(baseWidth * scale));
-  const height = Math.max(1, Math.round(baseHeight * scale));
+  // Very large images exceed what image canvases and the clipboard handle reliably.
+  const fitted = Math.min(scale, MAX_SIDE / Math.max(baseWidth, baseHeight));
+  const width = Math.max(1, Math.round(baseWidth * fitted));
+  const height = Math.max(1, Math.round(baseHeight * fitted));
   const sized = svg.replace(/width="\d+" height="\d+"/, `width="${width}" height="${height}"`);
   const url = URL.createObjectURL(new Blob([sized], { type: "image/svg+xml" }));
   try {

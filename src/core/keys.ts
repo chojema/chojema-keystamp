@@ -38,11 +38,13 @@ const WORDS: Record<string, string> = {
   pageup: "Page Up", pagedown: "Page Down", prtsc: "PrtSc", scrlk: "Scroll Lock", pause: "Pause",
   menu: "Menu", hangul: "한/영", hanja: "한자",
   up: "↑", down: "↓", left: "←", right: "→",
+  numlock: "Num Lock", numdiv: "/", nummul: "*", numsub: "-", numadd: "+", numdec: ".", numenter: "Enter",
+  num0: "0", num1: "1", num2: "2", num3: "3", num4: "4", num5: "5", num6: "6", num7: "7", num8: "8", num9: "9",
 };
 
 const MAC_WORDS: Record<string, string> = {
   esc: "esc", tab: "⇥", capslock: "⇪", backspace: "⌫", enter: "⏎", delete: "⌦",
-  home: "↖", end: "↘", pageup: "⇞", pagedown: "⇟",
+  home: "↖", end: "↘", pageup: "⇞", pagedown: "⇟", numlock: "clear", numenter: "⏎",
 };
 
 const MODIFIERS: Record<string, { win: string; symbol: string; word: string }> = {
@@ -112,6 +114,9 @@ const ALIASES: Record<string, string> = {
   "`": "backquote", "-": "minus", minus: "minus", "=": "equal", "+": "equal", plus: "equal",
   "[": "bracketleft", "]": "bracketright", "\\": "backslash", ";": "semicolon", "'": "quote",
   ",": "comma", ".": "period", "/": "slash",
+  numlock: "numlock", numadd: "numadd", numsub: "numsub", nummul: "nummul", numdiv: "numdiv", numdec: "numdec", numenter: "numenter",
+  num0: "num0", num1: "num1", num2: "num2", num3: "num3", num4: "num4", num5: "num5", num6: "num6", num7: "num7", num8: "num8", num9: "num9",
+  numpad0: "num0", numpad1: "num1", numpad2: "num2", numpad3: "num3", numpad4: "num4", numpad5: "num5", numpad6: "num6", numpad7: "num7", numpad8: "num8", numpad9: "num9",
 };
 
 function tokenToCode(raw: string): string {
@@ -148,12 +153,13 @@ export function parseCombo(input: string): KeyRef[] {
 const FROM_EVENT: Record<string, string> = {
   ControlLeft: "lctrl", ControlRight: "rctrl", ShiftLeft: "lshift", ShiftRight: "rshift",
   AltLeft: "lalt", AltRight: "ralt", MetaLeft: "lmeta", MetaRight: "rmeta", OSLeft: "lmeta", OSRight: "rmeta",
-  Escape: "esc", Tab: "tab", CapsLock: "capslock", Backspace: "backspace", Enter: "enter", NumpadEnter: "enter", Space: "space",
+  Escape: "esc", Tab: "tab", CapsLock: "capslock", Backspace: "backspace", Enter: "enter", NumpadEnter: "numenter", Space: "space",
   Insert: "insert", Delete: "delete", Home: "home", End: "end", PageUp: "pageup", PageDown: "pagedown",
   PrintScreen: "prtsc", ScrollLock: "scrlk", Pause: "pause", ContextMenu: "menu",
   ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right",
   Backquote: "backquote", Minus: "minus", Equal: "equal", BracketLeft: "bracketleft", BracketRight: "bracketright",
   Backslash: "backslash", Semicolon: "semicolon", Quote: "quote", Comma: "comma", Period: "period", Slash: "slash",
+  NumLock: "numlock", NumpadDivide: "numdiv", NumpadMultiply: "nummul", NumpadSubtract: "numsub", NumpadAdd: "numadd", NumpadDecimal: "numdec",
   IntlBackslash: "intlbackslash", Lang1: "hangul", Lang2: "hanja", HangulMode: "hangul", Hanja: "hanja",
 };
 
@@ -162,8 +168,10 @@ export function codeFromEvent(eventCode: string): string | null {
   if (FROM_EVENT[eventCode]) return FROM_EVENT[eventCode];
   let m = /^Key([A-Z])$/.exec(eventCode);
   if (m) return m[1].toLowerCase();
-  m = /^(?:Digit|Numpad)(\d)$/.exec(eventCode);
+  m = /^Digit(\d)$/.exec(eventCode);
   if (m) return m[1];
+  m = /^Numpad(\d)$/.exec(eventCode);
+  if (m) return `num${m[1]}`;
   if (/^F([1-9]|1[0-2])$/.test(eventCode)) return eventCode.toLowerCase();
   return null;
 }
@@ -175,6 +183,8 @@ export function comboToText(keys: KeyRef[]): string {
       const mod = modifierOf(code);
       if (mod) return MODIFIERS[mod].win;
       if (code === "space") return "Space";
+      // Number pad keys keep a name that reads back as the same key.
+      if (/^num(\d|lock|div|mul|sub|add|dec|enter)$/.test(code)) return code.replace(/^num(.)/, (_, c: string) => `Num${c.toUpperCase()}`);
       return legendFor(code, "windows", false).main;
     })
     .join(" + ");
