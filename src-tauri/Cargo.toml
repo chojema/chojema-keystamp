@@ -1,0 +1,27 @@
+[package]
+name = "chojema-keystamp"
+version = "0.1.0"
+description = "Create keycap images and animations"
+authors = ["Chulwoo Park"]
+edition = "2021"
+publish = false
+
+[lib]
+name = "keystamp_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+arboard = "3"
+percent-encoding = "2"
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
