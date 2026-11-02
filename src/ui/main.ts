@@ -1,7 +1,7 @@
 import { parse, type Font } from "opentype.js";
 import fontUrl from "pretendard/dist/web/static/woff/Pretendard-SemiBold.woff?url";
 import { animatedHtml, duration, pressStates, type Motion } from "../core/animation";
-import { codeFromEvent, comboToText, isModifier, legendFor, parseCombo, type KeyRef, type Platform } from "../core/keys";
+import { bothToText, codeFromEvent, comboToText, counterpartCode, isModifier, keysFor, legendFor, macComboToText, parseCombo, type KeyRef, type Platform } from "../core/keys";
 import { layoutKeys, type LayoutId } from "../core/layouts";
 import type { Profile } from "../core/mesh";
 import { buildScene, type SceneSpec } from "../core/scene";
@@ -158,10 +158,10 @@ function section(title: string, ...children: Node[]) {
 
 /* scene */
 
-function sceneSpec(): SceneSpec {
+function sceneSpec(platform: Platform = state.platform): SceneSpec {
   return {
-    keys,
-    platform: state.platform,
+    keys: keysFor(keys, platform),
+    platform,
     view: { tilt: state.tilt, yaw: state.yaw, perspective: state.perspective },
     style: { profile: state.profile, cap: state.cap, modifier: state.modifier, legend: state.legend, accent: state.accent, jamo: state.jamo },
     context: { enabled: state.context, layout: state.layout, reach: state.reach, blur: state.blur },
@@ -173,17 +173,45 @@ function sceneSpec(): SceneSpec {
 
 const motion = (): Motion => ({ travel: state.travel, stagger: state.stagger, hold: state.hold, pause: state.pause });
 
+const PLATFORMS: Platform[] = ["windows", "mac"];
 const stage = el("div", { class: "stage", tabindex: "0", role: "img" });
+const emptyNote = el("p", { class: "empty" }, t.empty);
+const views = PLATFORMS.map((platform) => {
+  const image = el("div", { class: "pane-image" });
+  const chip = el(
+    "button",
+    {
+      type: "button",
+      class: "pane-chip",
+      title: t.platform,
+      pointerdown: (event) => event.stopPropagation(),
+      click: () => update({ platform }),
+    },
+    t[platform],
+  );
+  syncers.push(() => chip.setAttribute("aria-pressed", String(state.platform === platform)));
+  const pane = el("div", { class: "pane" }, chip, image);
+  stage.append(pane);
+  return { platform, pane, image };
+});
+stage.append(emptyNote);
+
+const windowsText = el("input", { type: "text", readonly: "", "aria-label": `${t.windows} ${t.textResult}` });
+const macText = el("input", { type: "text", readonly: "", "aria-label": `${t.mac} ${t.textResult}` });
 
 function draw() {
+  windowsText.value = comboToText(keys);
+  macText.value = macComboToText(keysFor(keys, "mac"));
   if (!font) return;
-  if (keys.length === 0) {
-    stage.replaceChildren(el("p", { class: "empty" }, t.empty));
-    return;
-  }
+  const empty = keys.length === 0;
+  emptyNote.hidden = !empty;
+  views.forEach((view) => {
+    view.pane.hidden = empty;
+  });
+  if (empty) return;
   const press = playing ? pressStates(motion(), keys.length, (performance.now() - playStart) % duration(motion(), keys.length)) : [];
-  stage.innerHTML = buildScene(sceneSpec(), font, press).svg;
-  stage.setAttribute("aria-label", comboToText(keys, state.platform));
+  for (const view of views) view.image.innerHTML = buildScene(sceneSpec(view.platform), font, press).svg;
+  stage.setAttribute("aria-label", bothToText(keys));
 }
 
 function setPlaying(next: boolean) {
@@ -255,12 +283,20 @@ const keyInput = el("input", {
 
 function setKeys(next: KeyRef[]) {
   keys = next;
-  keyInput.value = comboToText(keys, state.platform);
+  keyInput.value = comboToText(keys);
   update({ text: keyInput.value });
   syncPicker();
 }
 
 const recordButton = el("button", { type: "button", class: "key", click: () => startRecording() }, t.record);
+
+const onMac = navigator.userAgent.includes("Mac");
+
+/** Keys are stored by their Windows role, so keys pressed on a Mac are mapped back. */
+function capturedCode(eventCode: string): string | null {
+  const code = codeFromEvent(eventCode);
+  return code && onMac ? counterpartCode(code) : code;
+}
 
 function startRecording() {
   recordButton.textContent = t.recording;
@@ -278,7 +314,7 @@ function startRecording() {
   const down = (e: KeyboardEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const code = codeFromEvent(e.code);
+    const code = capturedCode(e.code);
     if (!code) return;
     held.add(code);
     if (!captured.includes(code)) captured.push(code);
@@ -286,7 +322,7 @@ function startRecording() {
   const up = (e: KeyboardEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const code = codeFromEvent(e.code);
+    const code = capturedCode(e.code);
     if (code) held.delete(code);
     if (held.size === 0 && captured.length > 0) {
       finish();
@@ -307,11 +343,10 @@ const picker = el("div", { class: "picker", hidden: true });
 function syncPicker() {
   if (picker.hidden) return;
   picker.replaceChildren();
-  const placed = layoutKeys(state.layout, state.platform);
+  const placed = layoutKeys(state.layout, "windows");
   const size = 2.6;
   for (const key of placed) {
-    const legend = legendFor(key.code, state.platform, false);
-    const label = key.code === "space" ? "" : legend.word ? legend.main : legend.main;
+    const label = legendFor(key.code, "windows", false).main;
     const selected = keys.some((k) => k.code === key.code);
     const button = el(
       "button",
@@ -343,8 +378,8 @@ function say(message: string, sticky = false) {
 }
 
 function fileBase(): string {
-  const text = comboToText(keys, state.platform).replace(/\s*\+\s*/g, "-").replace(/[\\/:*?"<>|]/g, "_");
-  return `keystamp-${text || "key"}`;
+  const text = comboToText(keys).replace(/\s*\+\s*/g, "-").replace(/[\\/:*?"<>|]/g, "_");
+  return `keystamp-${text || "key"}-${state.platform}`;
 }
 
 async function guarded(action: () => Promise<string | null>) {
@@ -405,8 +440,13 @@ const actions = {
       await copyText(buildScene(sceneSpec(), font!).svg);
       return t.copied;
     }),
+  copyText: (text: () => string) =>
+    guarded(async () => {
+      await copyText(text());
+      return t.copied;
+    }),
   saveHtml: () =>
-    guarded(() => save(`${fileBase()}.html`, encoder.encode(animatedHtml(sceneSpec(), font!, motion(), comboToText(keys, state.platform))))),
+    guarded(() => save(`${fileBase()}.html`, encoder.encode(animatedHtml(sceneSpec(), font!, motion(), comboToText(keys))))),
   saveGif: () =>
     guarded(async () => {
       const { frames, width, height } = animationFrames();
@@ -500,10 +540,7 @@ function build() {
     { class: "inspector" },
     section(
       t.keycap,
-      segmented<Platform>(t.platform, [["windows", t.windows], ["mac", t.mac]], () => state.platform, (platform) => {
-        update({ platform });
-        syncPicker();
-      }),
+      segmented<Platform>(t.platform, [["windows", t.windows], ["mac", t.mac]], () => state.platform, (platform) => update({ platform })),
       segmented<Profile>(t.profile, [["sculpted", t.sculpted], ["low", t.low]], () => state.profile, (profile) => update({ profile })),
       el("div", { class: "row" }, el("span", {}, t.theme), themeButtons()),
       el("div", { class: "swatches" }, color(t.capColor, "cap"), color(t.modColor, "modifier"), color(t.legendColor, "legend"), color(t.accentColor, "accent")),
@@ -543,6 +580,17 @@ function build() {
     "main",
     { class: "workspace" },
     stage,
+    el(
+      "div",
+      { class: "text-results", role: "group", "aria-label": t.textResult },
+      el("span", {}, t.windows),
+      windowsText,
+      el("button", { type: "button", class: "key", click: () => actions.copyText(() => windowsText.value) }, t.copy),
+      el("span", {}, t.mac),
+      macText,
+      el("button", { type: "button", class: "key", click: () => actions.copyText(() => macText.value) }, t.copy),
+      el("button", { type: "button", class: "key copy-both", click: () => actions.copyText(() => bothToText(keys)) }, t.copyBoth),
+    ),
     el(
       "div",
       { class: "view-bar" },

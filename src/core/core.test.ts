@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { parse } from "opentype.js";
 import { describe, expect, it } from "vitest";
 import { animatedSvg, duration, pressAt } from "./animation";
-import { codeFromEvent, parseCombo } from "./keys";
+import { bothToText, codeFromEvent, comboToText, keysFor, macComboToText, parseCombo } from "./keys";
 import { layoutKeys } from "./layouts";
 import { buildScene, type SceneSpec } from "./scene";
 
@@ -26,8 +26,9 @@ const codes = (text: string) => parseCombo(text).map((k) => k.code);
 describe("parseCombo", () => {
   it("reads common spellings", () => {
     expect(codes("Ctrl + Shift + Z")).toEqual(["lctrl", "lshift", "z"]);
-    expect(codes("cmd-c")).toEqual(["lmeta", "c"]);
-    expect(codes("⌘⇧Z")).toEqual(["lmeta", "lshift", "z"]);
+    expect(codes("cmd-c")).toEqual(["lctrl", "c"]);
+    expect(codes("⌘⇧Z")).toEqual(["lctrl", "lshift", "z"]);
+    expect(codes("Win + E")).toEqual(["lmeta", "e"]);
     expect(codes("c")).toEqual(["c"]);
     expect(codes("F12")).toEqual(["f12"]);
   });
@@ -43,6 +44,28 @@ describe("parseCombo", () => {
   it("ignores repeats and empty text", () => {
     expect(codes("a + a")).toEqual(["a"]);
     expect(codes("  ")).toEqual([]);
+  });
+});
+
+describe("text output", () => {
+  const texts = (input: string) => {
+    const keys = parseCombo(input);
+    return [comboToText(keys), macComboToText(keysFor(keys, "mac"))];
+  };
+  it("gives each platform its own shortcut", () => {
+    expect(texts("Ctrl + C")).toEqual(["Ctrl + C", "⌘C"]);
+    expect(texts("Ctrl + Shift + Z")).toEqual(["Ctrl + Shift + Z", "⇧⌘Z"]);
+    expect(texts("⌘⇧Z")).toEqual(["Ctrl + Shift + Z", "⇧⌘Z"]);
+    expect(texts("Ctrl + Alt + Delete")).toEqual(["Ctrl + Alt + Delete", "⌥⌘⌦"]);
+    expect(texts("Win + E")).toEqual(["Win + E", "⌃E"]);
+  });
+  it("handles single keys and named keys", () => {
+    expect(texts("C")).toEqual(["C", "C"]);
+    expect(texts("Ctrl + Enter")).toEqual(["Ctrl + Enter", "⌘⏎"]);
+    expect(texts("Ctrl + Space")).toEqual(["Ctrl + Space", "⌘Space"]);
+  });
+  it("joins both on one line", () => {
+    expect(bothToText(parseCombo("Ctrl + C"))).toBe("Windows: Ctrl + C, Mac: ⌘C");
   });
 });
 
