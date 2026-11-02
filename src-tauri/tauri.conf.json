@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Chojema KeyStamp",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "identifier": "com.chojema.keystamp",
   "build": {
     "beforeDevCommand": "npm run dev",

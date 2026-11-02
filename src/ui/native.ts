@@ -1,5 +1,19 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 
+export const APP_LINKS = {
+  repository: "https://github.com/chojema/chojema-keystamp",
+  appPark: "https://chojema.github.io/AppPark/",
+} as const;
+
+/** Opens one of the app's information links in the default browser. */
+export async function openAppLink(link: keyof typeof APP_LINKS): Promise<void> {
+  if (isTauri()) {
+    await invoke("open_app_link", { link });
+  } else {
+    window.open(APP_LINKS[link], "_blank", "noopener,noreferrer");
+  }
+}
+
 /** Asks where to save, then writes the file. Returns false if the person cancels. */
 export async function saveFile(name: string, bytes: Uint8Array): Promise<boolean> {
   if (isTauri()) {

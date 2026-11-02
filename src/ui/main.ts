@@ -7,7 +7,7 @@ import { layoutKeys, type LayoutId } from "../core/layouts";
 import type { Profile } from "../core/mesh";
 import { buildScene, scaleWithin, type SceneSpec } from "../core/scene";
 import { t, type Strings } from "./i18n";
-import { copyImage, copyText, saveFile } from "./native";
+import { APP_LINKS, copyImage, copyText, openAppLink, saveFile } from "./native";
 import { encodeApng, encodeGif, pngBlob, rasterize, type Frame } from "./raster";
 import notices from "./notices.txt?raw";
 import "./styles.css";
@@ -58,6 +58,7 @@ const initial = {
   display: "both" as Display,
   scope: "keys" as Scope,
   keyboardPlatform: "windows" as Platform,
+  keyboardAppearance: "solid" as "solid" | "flat",
   numpad: false,
   highlight: true,
 };
@@ -173,6 +174,7 @@ function section(title: string, ...children: Node[]) {
 
 const shownDisplay = (): Display => (state.scope === "full" ? state.keyboardPlatform : state.display);
 const exportPlatform = (): Platform => (state.scope === "full" ? state.keyboardPlatform : state.platform);
+const isFlatKeyboard = () => state.scope === "full" && state.keyboardAppearance === "flat";
 
 function sceneSpec(platform: Platform = exportPlatform()): SceneSpec {
   return {
@@ -181,7 +183,7 @@ function sceneSpec(platform: Platform = exportPlatform()): SceneSpec {
     view: { tilt: state.tilt, yaw: state.yaw, perspective: state.perspective },
     style: { profile: state.profile, cap: state.cap, modifier: state.modifier, legend: state.legend, accent: state.accent, jamo: state.jamo },
     context: { enabled: state.scope === "nearby", layout: state.layout, reach: state.reach, blur: state.blur },
-    keyboard: { enabled: state.scope === "full", numpad: state.numpad, highlight: state.highlight },
+    keyboard: { enabled: state.scope === "full", numpad: state.numpad, highlight: state.highlight, appearance: state.keyboardAppearance },
     showPlus: state.showPlus,
     shadow: state.shadow,
     background: state.transparent ? null : state.background,
@@ -267,11 +269,12 @@ function setPlaying(next: boolean) {
 function attachDrag() {
   let start: { x: number; y: number; yaw: number; tilt: number } | null = null;
   stage.addEventListener("pointerdown", (e) => {
+    if (isFlatKeyboard()) return;
     stage.setPointerCapture(e.pointerId);
     start = { x: e.clientX, y: e.clientY, yaw: state.yaw, tilt: state.tilt };
   });
   stage.addEventListener("pointermove", (e) => {
-    if (!start) return;
+    if (!start || isFlatKeyboard()) return;
     let yaw = start.yaw + (e.clientX - start.x) * 0.5;
     yaw = ((yaw + 180) % 360 + 360) % 360 - 180;
     const tilt = Math.max(0, Math.min(85, start.tilt + (e.clientY - start.y) * 0.4));
@@ -283,6 +286,7 @@ function attachDrag() {
   stage.addEventListener("pointerup", end);
   stage.addEventListener("pointercancel", end);
   stage.addEventListener("keydown", (e) => {
+    if (isFlatKeyboard()) return;
     const step = e.shiftKey ? 15 : 5;
     const moves: Record<string, Partial<State>> = {
       ArrowLeft: { yaw: state.yaw - step },
@@ -573,6 +577,7 @@ function build() {
   const fullOptions = el(
     "div",
     {},
+    segmented<State["keyboardAppearance"]>(t.keyboardAppearance, [["solid", t.keyboardSolid], ["flat", t.keyboardFlat]], () => state.keyboardAppearance, (keyboardAppearance) => update({ keyboardAppearance })),
     segmented<Platform>(t.keyboardPlatform, [["windows", t.windows], ["mac", t.mac]], () => state.keyboardPlatform, (keyboardPlatform) => update({ keyboardPlatform })),
     toggle(t.highlight, "highlight"),
   );
@@ -594,6 +599,34 @@ function build() {
     el("form", { method: "dialog" }, el("button", { class: "key" }, "OK")),
   );
 
+  const aboutStatus = el("p", { class: "about-status", role: "status" });
+  const aboutLink = (link: keyof typeof APP_LINKS, label: string) => el(
+    "a",
+    {
+      class: "about-link",
+      href: APP_LINKS[link],
+      target: "_blank",
+      rel: "noopener noreferrer",
+      click: (event) => {
+        event.preventDefault();
+        aboutStatus.textContent = "";
+        void openAppLink(link).catch(() => { aboutStatus.textContent = t.linkFailed; });
+      },
+    },
+    el("span", { class: "about-link-name" }, label),
+    el("span", { class: "about-link-url" }, APP_LINKS[link]),
+  );
+  const aboutDialog = el(
+    "dialog",
+    { class: "about", id: "about-dialog", "aria-labelledby": "about-title" },
+    el("h2", { id: "about-title" }, "Chojema KeyStamp"),
+    el("dl", { class: "about-author" }, el("dt", {}, t.author), el("dd", {}, "Chulwoo Park")),
+    el("nav", { "aria-label": t.about }, aboutLink("repository", t.repository), aboutLink("appPark", "Chojema App Park")),
+    el("p", { class: "note" }, "© Chulwoo Park. All rights reserved."),
+    aboutStatus,
+    el("form", { method: "dialog", class: "about-actions" }, el("button", { class: "key", autofocus: true }, t.close)),
+  );
+
   const bgSwatch = color(t.background, "background");
   syncers.push(() => {
     bgSwatch.hidden = state.transparent;
@@ -604,11 +637,16 @@ function build() {
   );
   const targetChoice = segmented<Platform>(t.platform, [["windows", t.windows], ["mac", t.mac]], () => state.platform, (platform) => update({ platform }));
   const copyBothButton = el("button", { type: "button", class: "key", click: requireKeys(() => actions.copyText(() => bothToText(keys))) }, t.copyBoth);
+  const profileChoice = segmented<Profile>(t.profile, [["sculpted", t.sculpted], ["low", t.low]], () => state.profile, (profile) => update({ profile }));
+  const shadowChoice = toggle(t.shadow, "shadow");
   syncers.push(() => {
     const both = shownDisplay() === "both";
     displayChoice.hidden = state.scope === "full";
     targetChoice.hidden = !both;
     copyBothButton.hidden = !both;
+    profileChoice.hidden = isFlatKeyboard();
+    shadowChoice.hidden = isFlatKeyboard();
+    stage.classList.toggle("flat-keyboard", isFlatKeyboard());
     for (const view of views) view.pane.querySelector<HTMLElement>(".pane-chip")!.hidden = !both;
   });
 
@@ -619,12 +657,12 @@ function build() {
       t.keycap,
       displayChoice,
       targetChoice,
-      segmented<Profile>(t.profile, [["sculpted", t.sculpted], ["low", t.low]], () => state.profile, (profile) => update({ profile })),
+      profileChoice,
       el("div", { class: "row" }, el("span", {}, t.theme), themeButtons()),
       el("div", { class: "swatches" }, color(t.capColor, "cap"), color(t.modColor, "modifier"), color(t.legendColor, "legend"), color(t.accentColor, "accent")),
       toggle(t.jamo, "jamo"),
       segmented<"solid" | "none">(t.plus, [["solid", t.plusSolid], ["none", t.plusNone]], () => (state.showPlus ? "solid" : "none"), (value) => update({ showPlus: value === "solid" })),
-      toggle(t.shadow, "shadow"),
+      shadowChoice,
       toggle(t.transparent, "transparent"),
       bgSwatch,
     ),
@@ -712,6 +750,13 @@ function build() {
     ),
   );
 
+  const viewBar = stageWrap.querySelector<HTMLElement>(".view-bar")!;
+  syncers.push(() => {
+    for (const control of viewBar.children) {
+      if (control !== status) (control as HTMLElement).hidden = isFlatKeyboard();
+    }
+  });
+
   const pickerButton = el("button", {
     type: "button",
     class: "key",
@@ -729,9 +774,13 @@ function build() {
     recordButton,
     pickerButton,
     el("button", { type: "button", class: "key", click: () => setKeys([]) }, t.clear),
+    el("button", {
+      type: "button", class: "key", "aria-haspopup": "dialog", "aria-controls": "about-dialog",
+      click: () => { aboutStatus.textContent = ""; aboutDialog.showModal(); },
+    }, t.about),
   );
 
-  document.body.append(header, picker, el("div", { class: "columns" }, stageWrap, inspector), noticeDialog);
+  document.body.append(header, picker, el("div", { class: "columns" }, stageWrap, inspector), noticeDialog, aboutDialog);
   keyInput.value = state.text;
   attachDrag();
   syncControls();

@@ -20,8 +20,10 @@ The installer is not code signed, so Windows SmartScreen may warn you the first 
 - **2D images:** Copy or save flat keycap PNGs that fit inside a sentence.
 - **Surrounding keys:** Optionally show nearby keys with blurred edges, on ANSI, ISO, and Korean layouts.
 - **Full keyboard:** Create images and animations of the whole keyboard, as is or with chosen keys highlighted. Choose Windows or Mac keys, and whether to include the number pad.
+- **Full keyboard in 2D:** Under Keyboard, choose Full, then set Appearance to 2D for a crisp, flat keyboard. Copy and export preserve the platform, layout, number pad, Hangul letters, and highlight settings. The existing 3D view remains the default.
 - **Hangul letters:** Show Latin and Hangul letters together, arranged for Windows or Mac.
 - **Animation:** Save key presses as HTML, GIF, or APNG.
+- **About:** Use About in the top bar to see author information and links to the GitHub repository and Chojema App Park. Links open in the default browser.
 
 ## Good to know
 
@@ -41,6 +43,7 @@ npx tauri build
 
 ## Release notes
 
+- [v0.3.0](release-notes/v0.3.0.en.md)
 - [v0.2.1](release-notes/v0.2.1.en.md)
 - [v0.2.0](release-notes/v0.2.0.en.md) (withdrawn, replaced by v0.2.1)
 - [v0.1.0](release-notes/v0.1.0.en.md)

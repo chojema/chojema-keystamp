@@ -38,6 +38,8 @@ export interface KeyboardOptions {
   numpad: boolean;
   /** Colour the chosen keys and quieten all the others. */
   highlight: boolean;
+  /** Flat, straight-on keys instead of a projected 3D keyboard. */
+  appearance?: "solid" | "flat";
 }
 
 export interface SceneSpec {
@@ -306,7 +308,7 @@ function glyphPath(font: Font, text: string, size: number, toScreen: (x: number,
   return d;
 }
 
-function legendPaths(font: Font, legend: Legend, mesh: CapMesh, camera: Camera, dz: number, ink: string): string {
+function legendPaths(font: Font, legend: Legend, mesh: Pick<CapMesh, "cx" | "cy" | "legendW" | "legendD" | "surfaceZ">, camera: Camera, dz: number, ink: string): string {
   const place = (text: string, wanted: number, align: "center" | "left" | "right", fx: number, fy: number, opacity = 1): string => {
     if (!text) return "";
     const first = font.getPath(text, 0, 0, wanted).getBoundingBox();
@@ -371,9 +373,62 @@ export interface RenderedScene {
 
 const TINT = 0.55;
 
+/** A picker-like keyboard with crisp outlines and font-independent legends. */
+function buildFlatKeyboard(spec: SceneSpec, font: Font, press: number[]): RenderedScene {
+  const keys = placeFull(spec);
+  const camera = new Camera({ tilt: 0, yaw: 0, perspective: 0 }, 1);
+  const gap = 7;
+  const pad = 22;
+  const x0 = Math.min(...keys.map((k) => k.x)) * UNIT - pad;
+  const y0 = Math.min(...keys.map((k) => k.y)) * UNIT - pad;
+  const x1 = Math.max(...keys.map((k) => k.x + k.w)) * UNIT + pad;
+  const y1 = Math.max(...keys.map((k) => k.y + k.h)) * UNIT + pad;
+  const viewBox: [number, number, number, number] = [x0, y0, x1 - x0, y1 - y0];
+  const width = Math.ceil(viewBox[2]);
+  const height = Math.ceil(viewBox[3]);
+  const accent = parseHex(spec.style.accent);
+  const emphasise = spec.keyboard?.highlight && keys.some((k) => k.selected);
+  const caps: AnimatedCap[] = [];
+  let backdrop = "";
+  let selected = "";
+
+  for (const key of keys) {
+    const x = key.x * UNIT + gap / 2;
+    const y = key.y * UNIT + gap / 2;
+    const w = key.w * UNIT - gap;
+    const h = key.h * UNIT - gap;
+    const plain = parseHex(isModifier(key.code) ? spec.style.modifier : spec.style.cap);
+    const base = emphasise && key.selected ? accent : plain;
+    const pressedColor = emphasise ? mix(base, [0, 0, 0], 0.22) : mix(base, accent, TINT);
+    const ink = emphasise && key.selected
+      ? (0.299 * base[0] + 0.587 * base[1] + 0.114 * base[2] > 150 ? "#14181b" : "#ffffff")
+      : spec.style.legend;
+    const legendBox = {
+      cx: x + w / 2, cy: y + h / 2,
+      legendW: w - 18, legendD: Math.min(h - 18, 72),
+      surfaceZ: () => 0,
+    };
+    const legend = legendPaths(font, legendFor(key.code, spec.platform, spec.style.jamo), legendBox, camera, 0, ink);
+    const draw = (color: Rgb) =>
+      `<rect x="${fmt(x)}" y="${fmt(y)}" width="${fmt(w)}" height="${fmt(h)}" rx="8" fill="${toHex(color)}" stroke="${toHex(mix(color, parseHex(ink), 0.25))}" stroke-width="1.5"/>` + legend;
+    const rest = draw(base);
+    if (!key.selected) {
+      backdrop += rest;
+      continue;
+    }
+    const index = spec.keys.findIndex((k) => k.code === key.code);
+    selected += draw(mix(base, pressedColor, press[index] ?? 0));
+    caps.push({ index, before: "", rest, tinted: draw(pressedColor), originX: legendBox.cx, originY: legendBox.cy, offsetX: 0, offsetY: 0, scale: 1 });
+  }
+
+  const svg = openSvg(viewBox, width, height) + backgroundRect(viewBox, spec.background) + backdrop + selected + "</svg>";
+  return { svg, width, height, defs: "", backdrop, foreground: "", caps, viewBox };
+}
+
 /** Renders a scene. `press` holds a 0-1 amount per key in `spec.keys`. */
 export function buildScene(spec: SceneSpec, font: Font, press: number[] = []): RenderedScene {
   const full = spec.keyboard?.enabled ?? false;
+  if (full && spec.keyboard?.appearance === "flat") return buildFlatKeyboard(spec, font, press);
   const layoutPlaced = full ? placeFull(spec) : spec.context.enabled ? placeInLayout(spec) : null;
   const { keys, plus } = layoutPlaced ? { keys: layoutPlaced, plus: [] as Vec3[] } : placeRow(spec);
 

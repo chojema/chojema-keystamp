@@ -296,6 +296,66 @@ describe("full keyboard", () => {
   });
 });
 
+describe("flat full keyboard", () => {
+  const flatSpec = (text = "Ctrl + C", numpad = false) => spec(text, {
+    keyboard: { enabled: true, numpad, highlight: true, appearance: "flat" },
+  });
+
+  it.each(["ansi", "iso", "korean"] as const)("renders the complete %s layout without blur or font dependencies", (layout) => {
+    const base = flatSpec("");
+    base.context.layout = layout;
+    const scene = buildScene(base, font);
+    expect(scene.svg.match(/<rect /g)).toHaveLength(layoutKeys(layout, "windows").length);
+    expect(scene.svg).not.toMatch(/<text|<filter|NaN|Infinity/);
+    expect(scene.caps).toHaveLength(0);
+  });
+
+  it("ignores the 3D camera, profile, and shadow", () => {
+    const base = flatSpec();
+    const rest = buildScene(base, font);
+    const changed = buildScene({ ...base, view: { tilt: 85, yaw: 125, perspective: 1 }, shadow: false, style: { ...base.style, profile: "low" } }, font);
+    expect(changed.svg).toEqual(rest.svg);
+  });
+
+  it("keeps numpad keys, missing keys, and custom labels inside its frame", () => {
+    const base = flatSpec("NumEnter + 저장", true);
+    const scene = buildScene(base, font);
+    expect(scene.width).toBeGreaterThan(buildScene(flatSpec(), font).width);
+    expect(scene.caps).toHaveLength(2);
+    const [x, y, w, h] = scene.viewBox;
+    for (const rect of scene.svg.matchAll(/<rect x="([^"]+)" y="([^"]+)" width="([^"]+)" height="([^"]+)"/g)) {
+      expect(Number(rect[1])).toBeGreaterThanOrEqual(x);
+      expect(Number(rect[2])).toBeGreaterThanOrEqual(y);
+      expect(Number(rect[1]) + Number(rect[3])).toBeLessThanOrEqual(x + w);
+      expect(Number(rect[2]) + Number(rect[4])).toBeLessThanOrEqual(y + h);
+    }
+  });
+
+  it("shows highlight only when enabled, with platform legends and jamo", () => {
+    const base = flatSpec();
+    expect(buildScene(base, font).svg).toContain(`fill="${base.style.accent}"`);
+    const unlit = buildScene({ ...base, keyboard: { ...base.keyboard!, highlight: false } }, font);
+    expect(unlit.svg).not.toContain(`fill="${base.style.accent}"`);
+    expect(buildScene({ ...base, platform: "mac" }, font).svg).not.toEqual(buildScene(base, font).svg);
+    expect(buildScene({ ...base, style: { ...base.style, jamo: true } }, font).svg).toContain("fill-opacity");
+    expect(buildScene({ ...base, background: "#abcdef" }, font).svg).toContain('fill="#abcdef"');
+  });
+
+  it("animates press colour while keeping every key and the frame fixed", () => {
+    const base = flatSpec();
+    const rest = buildScene(base, font);
+    const pressed = buildScene(base, font, [1, 0.5]);
+    expect(pressed.svg).not.toEqual(rest.svg);
+    expect(pressed.viewBox).toEqual(rest.viewBox);
+    for (const cap of rest.caps) {
+      expect([cap.offsetX, cap.offsetY, cap.scale]).toEqual([0, 0, 1]);
+    }
+    const animation = animatedSvg(base, font, { travel: 100, stagger: 50, hold: 200, pause: 300 });
+    expect(animation).toContain("@keyframes k1t");
+    expect(animation).not.toMatch(/NaN|Infinity|<filter/);
+  });
+});
+
 describe("animation", () => {
   const motion = { travel: 100, stagger: 50, hold: 200, pause: 300 };
   it("presses in order, releases in reverse, and ends at rest", () => {
