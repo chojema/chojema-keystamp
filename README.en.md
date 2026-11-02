@@ -6,9 +6,11 @@ A desktop app that creates keycap images and animations.
 
 ## Download
 
-Get the Windows installer from the [latest release](https://github.com/chojema/chojema-keystamp/releases/latest). A macOS version is not available yet.
+Get the Windows installer or macOS Universal DMG from the [latest release](https://github.com/chojema/chojema-keystamp/releases/latest). The macOS app supports Apple Silicon and Intel Macs. Open the DMG and drag the app to Applications.
 
-The installer is not code signed, so Windows SmartScreen may warn you the first time you run it. Select `More info`, then `Run anyway`, to install.
+The macOS app has no Developer ID signature or Apple notarization, so Gatekeeper may show a warning.
+
+The Windows installer is not code signed, so Windows SmartScreen may warn you the first time you run it. Select `More info`, then `Run anyway`, to install.
 
 ## Screenshots
 

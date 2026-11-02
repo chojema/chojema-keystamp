@@ -6,9 +6,11 @@
 
 ## 다운로드
 
-[최신 릴리스](https://github.com/chojema/chojema-keystamp/releases/latest)에서 Windows 설치 파일을 받으세요. macOS용은 아직 제공하지 않습니다.
+[최신 릴리스](https://github.com/chojema/chojema-keystamp/releases/latest)에서 Windows 설치 파일 또는 macOS Universal DMG를 받으세요. macOS용은 Apple Silicon과 Intel Mac을 지원합니다. DMG를 열고 앱을 Applications 폴더로 끌어다 놓으세요.
 
-설치 파일은 코드 서명이 되어 있지 않아 처음 실행할 때 Windows SmartScreen 경고가 나올 수 있습니다. `추가 정보`를 누른 뒤 `실행`을 선택하면 설치할 수 있습니다.
+macOS 앱은 Developer ID 서명과 Apple 공증을 받지 않아 Gatekeeper 경고가 나올 수 있습니다.
+
+Windows 설치 파일은 코드 서명이 되어 있지 않아 처음 실행할 때 Windows SmartScreen 경고가 나올 수 있습니다. `추가 정보`를 누른 뒤 `실행`을 선택하면 설치할 수 있습니다.
 
 ## 화면 미리 보기
 
