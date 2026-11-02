@@ -86,6 +86,69 @@ export interface CapMesh {
   legendD: number;
 }
 
+export interface PlusMesh {
+  base: Vec3[];
+  quads: Vec3[][];
+  /** Height order of each quad, so upper faces always draw over lower ones. */
+  quadLayers: number[];
+  top: Vec3[];
+}
+
+const PLUS_REACH = 19;
+const PLUS_ARM = 6.5;
+const PLUS_RINGS: Ring[] = [
+  { inset: 0, z: 0 },
+  { inset: 0.5, z: 9 },
+  { inset: 1.2, z: 11.6 },
+  { inset: 2.4, z: 13 },
+];
+
+/** Outline of a plus sign with softened corners, clockwise on screen. */
+function plusOutline(cx: number, cy: number, inset: number): [number, number][] {
+  const l = PLUS_REACH - inset;
+  const a = PLUS_ARM - inset;
+  const corners: [number, number][] = [
+    [-a, -l], [a, -l], [a, -a], [l, -a], [l, a], [a, a],
+    [a, l], [-a, l], [-a, a], [-l, a], [-l, -a], [-a, -a],
+  ];
+  const r = Math.max(0.8, 3 - inset * 0.5);
+  const steps = 3;
+  const pts: [number, number][] = [];
+  corners.forEach(([x, y], i) => {
+    const [px, py] = corners[(i + corners.length - 1) % corners.length];
+    const [nx, ny] = corners[(i + 1) % corners.length];
+    const inLength = Math.hypot(x - px, y - py);
+    const outLength = Math.hypot(nx - x, ny - y);
+    const sx = x - ((x - px) / inLength) * r;
+    const sy = y - ((y - py) / inLength) * r;
+    const ex = x + ((nx - x) / outLength) * r;
+    const ey = y + ((ny - y) / outLength) * r;
+    for (let s = 0; s <= steps; s++) {
+      const t = s / steps;
+      const u = 1 - t;
+      pts.push([cx + u * u * sx + 2 * u * t * x + t * t * ex, cy + u * u * sy + 2 * u * t * y + t * t * ey]);
+    }
+  });
+  return pts;
+}
+
+/** Builds the small solid plus placed between keys. */
+export function buildPlus(cx: number, cy: number): PlusMesh {
+  const loops = PLUS_RINGS.map((ring) => plusOutline(cx, cy, ring.inset).map(([x, y]): Vec3 => [x, y, ring.z]));
+  const quads: Vec3[][] = [];
+  const quadLayers: number[] = [];
+  for (let i = 0; i < loops.length - 1; i++) {
+    const a = loops[i];
+    const b = loops[i + 1];
+    for (let j = 0; j < a.length; j++) {
+      const n = (j + 1) % a.length;
+      quads.push([a[j], a[n], b[n], b[j]]);
+      quadLayers.push(i);
+    }
+  }
+  return { base: loops[0], quads, quadLayers, top: loops[loops.length - 1] };
+}
+
 /**
  * Builds a keycap by lofting rounded rectangles along a side profile.
  * Lower detail keeps blurred surrounding keys small in the exported file.

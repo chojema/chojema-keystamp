@@ -545,7 +545,7 @@ function build() {
       el("div", { class: "row" }, el("span", {}, t.theme), themeButtons()),
       el("div", { class: "swatches" }, color(t.capColor, "cap"), color(t.modColor, "modifier"), color(t.legendColor, "legend"), color(t.accentColor, "accent")),
       toggle(t.jamo, "jamo"),
-      toggle(t.plus, "showPlus"),
+      segmented<"solid" | "none">(t.plus, [["solid", t.plusSolid], ["none", t.plusNone]], () => (state.showPlus ? "solid" : "none"), (value) => update({ showPlus: value === "solid" })),
       toggle(t.shadow, "shadow"),
       toggle(t.transparent, "transparent"),
       bgSwatch,

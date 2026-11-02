@@ -113,6 +113,25 @@ describe("buildScene", () => {
     expect(pressed.viewBox).toEqual(rest.viewBox);
     expect(pressed.svg).not.toEqual(rest.svg);
   });
+  it("draws the plus as a solid part in every view and leaves it out when off", () => {
+    const fills = (svg: string) => new Set(svg.match(/fill="#[0-9a-f]{6}"/g)).size;
+    const noShadow = { shadow: false, style: { profile: "low" as const, cap: "#808080", modifier: "#808080", legend: "#000000", accent: "#1f6feb", jamo: false } };
+    const on = buildScene(spec("Ctrl + C", noShadow), font).svg;
+    const off = buildScene(spec("Ctrl + C", { ...noShadow, showPlus: false }), font).svg;
+    expect(on.length).toBeGreaterThan(off.length);
+    expect(fills(on)).toBeGreaterThan(1);
+    for (const tilt of [0, 30, 45, 60, 85]) {
+      for (const yaw of [-180, -90, 0, 45, 90]) {
+        expect(buildScene(spec("Ctrl + C", { view: { tilt, yaw, perspective: 0.5 } }), font).svg).not.toMatch(/NaN|Infinity/);
+      }
+    }
+  });
+  it("keeps the plus in the animated export", () => {
+    const motion = { travel: 100, stagger: 50, hold: 200, pause: 300 };
+    const on = animatedSvg(spec("Ctrl + C"), font, motion);
+    const off = animatedSvg(spec("Ctrl + C", { showPlus: false }), font, motion);
+    expect(on.length).toBeGreaterThan(off.length);
+  });
   it("shows surrounding keys only when asked", () => {
     expect(buildScene(spec("C"), font).svg).not.toContain("ks-mask");
     const context = spec("C", { context: { enabled: true, layout: "ansi", reach: 1.5, blur: 6 } });

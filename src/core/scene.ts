@@ -1,7 +1,7 @@
 import type { Font } from "opentype.js";
 import { isModifier, legendFor, rowWidth, type KeyRef, type Legend, type Platform } from "./keys";
 import { layoutKeys, type LayoutId } from "./layouts";
-import { buildCap, keyTravel, UNIT, type CapMesh, type Profile, type Vec3 } from "./mesh";
+import { buildCap, buildPlus, keyTravel, UNIT, type CapMesh, type Profile, type Vec3 } from "./mesh";
 
 export interface View {
   /** Degrees away from straight down: 0 is the top view. */
@@ -165,7 +165,7 @@ class Bounds {
 
 /* key placement */
 
-const PLUS_GAP = 0.48;
+const PLUS_GAP = 0.5;
 
 function placeRow(spec: SceneSpec): { keys: KeyInstance[]; plus: Vec3[] } {
   const plus: Vec3[] = [];
@@ -222,21 +222,23 @@ function placeInLayout(spec: SceneSpec): KeyInstance[] | null {
 
 /* drawing */
 
-function capFaces(mesh: CapMesh, base: Rgb, camera: Camera, dz: number, bounds?: Bounds): string {
+function capFaces(mesh: { quads: Vec3[][]; top: Vec3[]; quadLayers?: number[] }, base: Rgb, camera: Camera, dz: number, bounds?: Bounds): string {
   const faces: { depth: number; fill: string; d: string }[] = [];
-  const addFace = (points: Vec3[], normal: Vec3) => {
+  const LAYER = 1e6;
+  const addFace = (points: Vec3[], normal: Vec3, layer: number) => {
     const moved = points.map((p): Vec3 => [p[0], p[1], p[2] - dz]);
     const projected = moved.map((p) => camera.project(p));
     if (signedArea(projected) <= 0) return;
     faces.push({
-      depth: moved.reduce((sum, p) => sum + camera.depth(p), 0) / moved.length,
+      depth: layer * LAYER + moved.reduce((sum, p) => sum + camera.depth(p), 0) / moved.length,
       fill: toHex(shade(base, normal, camera.viewDir)),
       d: pathOf(projected),
     });
     if (bounds) projected.forEach((p) => bounds.add(p));
   };
-  for (const quad of mesh.quads) addFace(quad, faceNormal(quad));
-  addFace(mesh.top, [0, 0, 1]);
+  mesh.quads.forEach((quad, i) => addFace(quad, faceNormal(quad), mesh.quadLayers?.[i] ?? 0));
+  // A plus has concave corners, so its faces draw from the ground up with the top last.
+  addFace(mesh.top, [0, 0, 1], mesh.quadLayers ? mesh.quadLayers.length : 0);
   faces.sort((a, b) => a.depth - b.depth);
 
   // Each face is stroked in its own colour so no seams show between faces.
@@ -302,17 +304,13 @@ function legendPaths(font: Font, legend: Legend, mesh: CapMesh, camera: Camera, 
   return main + (legend.jamo ? place(legend.jamo, min * 0.3, "right", 0.5, 0.36, 0.8) : "");
 }
 
-function plusInk(background: string | null): string {
-  if (!background) return "#59626a";
-  const [r, g, b] = parseHex(background);
-  return 0.299 * r + 0.587 * g + 0.114 * b > 140 ? "#3a4149" : "#d6dade";
-}
-
 /* scene */
 
 export interface AnimatedCap {
   /** Position of this key in the pressed sequence. */
   index: number;
+  /** Static parts that sit behind this key. */
+  before: string;
   rest: string;
   tinted: string;
   originX: number;
@@ -408,6 +406,8 @@ export function buildScene(spec: SceneSpec, font: Font, press: number[] = []): R
     .sort((a, b) => depthOf(a) - depthOf(b))
     .map((key) => ({ key, mesh: meshOf(key, "full"), index: spec.keys.findIndex((s) => s.code === key.code) }));
 
+  const plusParts = plus.map((center) => ({ mesh: buildPlus(center[0], center[1]), depth: camera.depth(center) })).sort((a, b) => a.depth - b.depth);
+
   if (spec.shadow && others.length === 0 && chosen.length > 0) {
     defs += `<filter id="ks-shadow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="9"/></filter>`;
     let d = "";
@@ -416,21 +416,25 @@ export function buildScene(spec: SceneSpec, font: Font, press: number[] = []): R
       pts.forEach((p) => bounds.add(p, 22));
       d += pathOf(pts);
     }
+    for (const { mesh } of plusParts) {
+      d += pathOf(mesh.base.map(([x, y]) => camera.project([x + 2, y + 3, -1])));
+    }
     backdrop += `<path d="${d}" fill="#000" fill-opacity=".32" filter="url(#ks-shadow)"/>`;
   }
 
-  for (const center of plus) {
-    const box = font.getPath("+", 0, 0, 46).getBoundingBox();
-    const d = glyphPath(font, "+", 46, (x, y) =>
-      camera.project([center[0] + x - (box.x1 + box.x2) / 2, center[1] + y - (box.y1 + box.y2) / 2, 0]),
-    );
-    backdrop += `<path fill="${plusInk(spec.background)}" d="${d}"/>`;
-    bounds.add(camera.project(center), 24);
-  }
+  // Parts are woven between keys by depth, so a key behind a plus never covers it.
+  const plusMarkup = plusParts.map((part) => ({ depth: part.depth, markup: capFaces(part.mesh, modBase, camera, 0, bounds) }));
+  const takePlusBefore = (depth: number) => {
+    let out = "";
+    while (plusMarkup.length > 0 && plusMarkup[0].depth < depth) out += plusMarkup.shift()!.markup;
+    return out;
+  };
 
   const caps: AnimatedCap[] = [];
   let flat = "";
   for (const { key, mesh, index } of chosen) {
+    const before = takePlusBefore(depthOf(key));
+    flat += before;
     const amount = press[index] ?? 0;
     const base = colorOf(key.code);
     const legend = legendFor(key.code, spec.platform, spec.style.jamo);
@@ -449,6 +453,7 @@ export function buildScene(spec: SceneSpec, font: Font, press: number[] = []): R
     const edgeDown = camera.project([mesh.cx + mesh.w / 2, mesh.cy, mesh.height - travel]);
     caps.push({
       index,
+      before,
       rest,
       tinted: draw(mix(base, accent, TINT), 0),
       originX: ox,
@@ -458,6 +463,8 @@ export function buildScene(spec: SceneSpec, font: Font, press: number[] = []): R
       scale: Math.hypot(edgeDown[0] - px, edgeDown[1] - py) / Math.max(1e-6, Math.hypot(edge[0] - ox, edge[1] - oy)),
     });
   }
+
+  foreground = plusMarkup.map((part) => part.markup).join("") + foreground;
 
   const pad = 26;
   if (bounds.x0 === Infinity) {

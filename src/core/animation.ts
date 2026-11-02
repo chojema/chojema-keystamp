@@ -61,7 +61,7 @@ export function animatedSvg(spec: SceneSpec, font: Font, motion: Motion): string
     css += `@keyframes k${i}m{${move}}@keyframes k${i}t{${tint}}`;
     css += `.k${i}{transform-origin:${round(cap.originX)}px ${round(cap.originY)}px;animation:k${i}m ${total}ms linear infinite}`;
     css += `.k${i} .t{animation:k${i}t ${total}ms linear infinite}`;
-    body += `<g class="k${i}">${cap.rest}<g class="t" opacity="0">${cap.tinted}</g></g>`;
+    body += `${cap.before}<g class="k${i}">${cap.rest}<g class="t" opacity="0">${cap.tinted}</g></g>`;
   });
   css += "@media (prefers-reduced-motion:reduce){*{animation:none!important}}";
   return (
