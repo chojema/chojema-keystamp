@@ -326,22 +326,6 @@ function legendPaths(font: Font, legend: Legend, mesh: CapMesh, camera: Camera, 
   };
 
   const min = Math.min(mesh.legendW, mesh.legendD);
-  if (legend.windowsLogo) {
-    const pane = min * 0.21;
-    const gap = min * 0.035;
-    let d = "";
-    for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-      const near = gap / 2;
-      const far = near + pane;
-      const x0 = mesh.cx + sx * near;
-      const x1 = mesh.cx + sx * far;
-      const y0 = mesh.cy + sy * near;
-      const y1 = mesh.cy + sy * far;
-      const corners: [number, number][] = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
-      d += pathOf(corners.map(([x, y]) => camera.project([x, y, mesh.surfaceZ(x, y) + 0.2 - dz])));
-    }
-    return `<path fill="${ink}" d="${d}"/>`;
-  }
   if (legend.word) return place(legend.main, min * 0.42, "center", 0, -0.13) + place(legend.word, min * 0.2, "center", 0, 0.31);
   if (legend.shift) return place(legend.shift, min * 0.36, "center", 0, -0.25) + place(legend.main, min * 0.36, "center", 0, 0.25);
   const chars = [...legend.main].length;

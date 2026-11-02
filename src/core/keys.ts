@@ -11,8 +11,6 @@ export interface Legend {
   shift?: string;
   /** Small word under a symbol, such as "command". */
   word?: string;
-  /** Draw the four-pane Windows logo instead of the main text. */
-  windowsLogo?: boolean;
   /** Hangul jamo. Windows keys print it lower right, Mac keys lower left. */
   jamo?: string;
   platform?: Platform;
@@ -73,7 +71,7 @@ export function legendFor(code: string, platform: Platform, jamo: boolean): Lege
   if (mod) {
     const m = MODIFIERS[mod];
     if (platform === "mac") return { main: m.symbol, word: m.word };
-    return { main: m.win, windowsLogo: mod === "meta" };
+    return { main: m.win };
   }
   if (SHIFTED[code]) return { main: SHIFTED[code][0], shift: SHIFTED[code][1] };
   if (/^[a-z]$/.test(code)) return { main: code.toUpperCase(), jamo: jamo ? JAMO[code] : undefined, platform };

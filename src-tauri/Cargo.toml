@@ -1,6 +1,6 @@
 [package]
 name = "chojema-keystamp"
-version = "0.2.0"
+version = "0.2.1"
 description = "Create keycap images and animations"
 authors = ["Chulwoo Park"]
 edition = "2021"

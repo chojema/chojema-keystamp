@@ -41,7 +41,8 @@ npx tauri build
 
 ## Release notes
 
-- [v0.2.0](release-notes/v0.2.0.en.md)
+- [v0.2.1](release-notes/v0.2.1.en.md)
+- [v0.2.0](release-notes/v0.2.0.en.md) (withdrawn, replaced by v0.2.1)
 - [v0.1.0](release-notes/v0.1.0.en.md)
 
 ## Copyright

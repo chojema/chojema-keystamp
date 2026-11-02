@@ -41,7 +41,8 @@ npx tauri build
 
 ## 릴리스 노트
 
-- [v0.2.0](release-notes/v0.2.0.md)
+- [v0.2.1](release-notes/v0.2.1.md)
+- [v0.2.0](release-notes/v0.2.0.md) (회수됨, v0.2.1로 대체)
 - [v0.1.0](release-notes/v0.1.0.md)
 
 ## 저작권
