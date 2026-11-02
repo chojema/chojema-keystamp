@@ -93,14 +93,11 @@ export function rowWidth(code: string): number {
 }
 
 const ALIASES: Record<string, string> = {
-  ctrl: "lctrl", control: "lctrl", ctl: "lctrl", 컨트롤: "lctrl", lctrl: "lctrl", rctrl: "rctrl",
-  // The Mac control symbol names the Mac key itself, whose counterpart is the Windows key.
-  "⌃": "lmeta", "^": "lmeta",
+  ctrl: "lctrl", control: "lctrl", ctl: "lctrl", 컨트롤: "lctrl", lctrl: "lctrl", rctrl: "rctrl", "⌃": "lctrl", "^": "lctrl",
   shift: "lshift", "⇧": "lshift", 시프트: "lshift", lshift: "lshift", rshift: "rshift",
   alt: "lalt", option: "lalt", opt: "lalt", "⌥": "lalt", 알트: "lalt", lalt: "lalt", ralt: "ralt",
   win: "lmeta", windows: "lmeta", "⊞": "lmeta", meta: "lmeta", super: "lmeta", lmeta: "lmeta", rmeta: "rmeta",
-  // Keys are stored by their Windows role, so the Mac command key is Ctrl's counterpart.
-  cmd: "lctrl", command: "lctrl", "⌘": "lctrl",
+  cmd: "lmeta", command: "lmeta", "⌘": "lmeta",
   esc: "esc", escape: "esc", tab: "tab", "⇥": "tab", caps: "capslock", capslock: "capslock", "⇪": "capslock",
   backspace: "backspace", bksp: "backspace", "⌫": "backspace", enter: "enter", return: "enter", "⏎": "enter", "↵": "enter",
   space: "space", spacebar: "space", 스페이스: "space", ins: "insert", insert: "insert", del: "delete", delete: "delete", "⌦": "delete",
@@ -167,18 +164,6 @@ export function codeFromEvent(eventCode: string): string | null {
   return null;
 }
 
-const MAC_COUNTERPART: Record<string, string> = { lctrl: "lmeta", rctrl: "rmeta", lmeta: "lctrl", rmeta: "rctrl" };
-
-/** Swaps a key with its counterpart on the other platform: Ctrl and command, Win and control. */
-export function counterpartCode(code: string): string {
-  return MAC_COUNTERPART[code] ?? code;
-}
-
-/** Keys as a person presses them on the given platform. Keys are stored by their Windows role. */
-export function keysFor(keys: KeyRef[], platform: Platform): KeyRef[] {
-  return platform === "mac" ? keys.map(({ code }) => ({ code: counterpartCode(code) })) : keys;
-}
-
 /** Windows text, such as "Ctrl + Shift + Z". */
 export function comboToText(keys: KeyRef[]): string {
   return keys
@@ -193,7 +178,7 @@ export function comboToText(keys: KeyRef[]): string {
 
 const MAC_MODIFIER_ORDER = ["ctrl", "alt", "shift", "meta"];
 
-/** Mac text in the standard modifier order, such as "⇧⌘Z". Takes keys already mapped for Mac. */
+/** Mac text in the standard modifier order, such as "⇧⌘Z". */
 export function macComboToText(keys: KeyRef[]): string {
   const modifiers = keys
     .map(({ code }) => modifierOf(code))
@@ -225,5 +210,5 @@ export function windowsResultText(keys: KeyRef[]): string {
 
 /** Both platforms on one line, ready to paste into a sentence. */
 export function bothToText(keys: KeyRef[]): string {
-  return `Windows: ${windowsResultText(keys)}, Mac: ${macComboToText(keysFor(keys, "mac"))}`;
+  return `Windows: ${windowsResultText(keys)}, Mac: ${macComboToText(keys)}`;
 }

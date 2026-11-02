@@ -2,7 +2,7 @@ import { parse, type Font } from "opentype.js";
 import fontUrl from "pretendard/dist/web/static/woff/Pretendard-SemiBold.woff?url";
 import { animatedHtml, duration, pressStates, type Motion } from "../core/animation";
 import { buildFlatImage } from "../core/flat";
-import { bothToText, codeFromEvent, comboToText, counterpartCode, isModifier, keysFor, legendFor, macComboToText, parseCombo, windowsResultText, type KeyRef, type Platform } from "../core/keys";
+import { bothToText, codeFromEvent, comboToText, isModifier, legendFor, macComboToText, parseCombo, windowsResultText, type KeyRef, type Platform } from "../core/keys";
 import { layoutKeys, type LayoutId } from "../core/layouts";
 import type { Profile } from "../core/mesh";
 import { buildScene, type SceneSpec } from "../core/scene";
@@ -162,7 +162,7 @@ function section(title: string, ...children: Node[]) {
 
 function sceneSpec(platform: Platform = state.platform): SceneSpec {
   return {
-    keys: keysFor(keys, platform),
+    keys,
     platform,
     view: { tilt: state.tilt, yaw: state.yaw, perspective: state.perspective },
     style: { profile: state.profile, cap: state.cap, modifier: state.modifier, legend: state.legend, accent: state.accent, jamo: state.jamo },
@@ -207,12 +207,12 @@ const flatPreviews: Record<Platform, HTMLElement> = {
 };
 
 function flatImage(platform: Platform) {
-  return buildFlatImage(keysFor(keys, platform), platform, font!, sceneSpec(platform).style, state.showPlus, state.inlineHeight);
+  return buildFlatImage(keys, platform, font!, sceneSpec(platform).style, state.showPlus, state.inlineHeight);
 }
 
 function draw() {
   windowsText.value = windowsResultText(keys);
-  macText.value = macComboToText(keysFor(keys, "mac"));
+  macText.value = macComboToText(keys);
   if (!font) return;
   const empty = keys.length === 0;
   emptyNote.hidden = !empty;
@@ -302,14 +302,6 @@ function setKeys(next: KeyRef[]) {
 
 const recordButton = el("button", { type: "button", class: "key", click: () => startRecording() }, t.record);
 
-const onMac = navigator.userAgent.includes("Mac");
-
-/** Keys are stored by their Windows role, so keys pressed on a Mac are mapped back. */
-function capturedCode(eventCode: string): string | null {
-  const code = codeFromEvent(eventCode);
-  return code && onMac ? counterpartCode(code) : code;
-}
-
 function startRecording() {
   recordButton.textContent = t.recording;
   recordButton.classList.add("active");
@@ -326,7 +318,7 @@ function startRecording() {
   const down = (e: KeyboardEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const code = capturedCode(e.code);
+    const code = codeFromEvent(e.code);
     if (!code) return;
     held.add(code);
     if (!captured.includes(code)) captured.push(code);
@@ -334,7 +326,7 @@ function startRecording() {
   const up = (e: KeyboardEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const code = capturedCode(e.code);
+    const code = codeFromEvent(e.code);
     if (code) held.delete(code);
     if (held.size === 0 && captured.length > 0) {
       finish();

@@ -3,7 +3,7 @@ import { parse } from "opentype.js";
 import { describe, expect, it } from "vitest";
 import { animatedSvg, duration, pressAt } from "./animation";
 import { buildFlatImage } from "./flat";
-import { bothToText, codeFromEvent, comboToText, keysFor, macComboToText, parseCombo, windowsResultText } from "./keys";
+import { bothToText, codeFromEvent, comboToText, macComboToText, parseCombo, windowsResultText } from "./keys";
 import { layoutKeys } from "./layouts";
 import { buildScene, type SceneSpec } from "./scene";
 
@@ -27,8 +27,9 @@ const codes = (text: string) => parseCombo(text).map((k) => k.code);
 describe("parseCombo", () => {
   it("reads common spellings", () => {
     expect(codes("Ctrl + Shift + Z")).toEqual(["lctrl", "lshift", "z"]);
-    expect(codes("cmd-c")).toEqual(["lctrl", "c"]);
-    expect(codes("⌘⇧Z")).toEqual(["lctrl", "lshift", "z"]);
+    expect(codes("cmd-c")).toEqual(["lmeta", "c"]);
+    expect(codes("⌘⇧Z")).toEqual(["lmeta", "lshift", "z"]);
+    expect(codes("⌃C")).toEqual(["lctrl", "c"]);
     expect(codes("Win + E")).toEqual(["lmeta", "e"]);
     expect(codes("c")).toEqual(["c"]);
     expect(codes("F12")).toEqual(["f12"]);
@@ -51,19 +52,20 @@ describe("parseCombo", () => {
 describe("text output", () => {
   const texts = (input: string) => {
     const keys = parseCombo(input);
-    return [comboToText(keys), macComboToText(keysFor(keys, "mac"))];
+    return [comboToText(keys), macComboToText(keys)];
   };
   it("gives each platform its own shortcut", () => {
-    expect(texts("Ctrl + C")).toEqual(["Ctrl + C", "⌘C"]);
-    expect(texts("Ctrl + Shift + Z")).toEqual(["Ctrl + Shift + Z", "⇧⌘Z"]);
-    expect(texts("⌘⇧Z")).toEqual(["Ctrl + Shift + Z", "⇧⌘Z"]);
-    expect(texts("Ctrl + Alt + Delete")).toEqual(["Ctrl + Alt + Delete", "⌥⌘⌦"]);
-    expect(texts("Win + E")).toEqual(["Win + E", "⌃E"]);
+    expect(texts("Ctrl + C")).toEqual(["Ctrl + C", "⌃C"]);
+    expect(texts("Ctrl + Shift + Z")).toEqual(["Ctrl + Shift + Z", "⌃⇧Z"]);
+    expect(texts("⌘⇧Z")).toEqual(["Win + Shift + Z", "⇧⌘Z"]);
+    expect(texts("Cmd + E")).toEqual(["Win + E", "⌘E"]);
+    expect(texts("Ctrl + Alt + Delete")).toEqual(["Ctrl + Alt + Delete", "⌃⌥⌦"]);
+    expect(texts("Win + E")).toEqual(["Win + E", "⌘E"]);
   });
   it("handles single keys and named keys", () => {
     expect(texts("C")).toEqual(["C", "C"]);
-    expect(texts("Ctrl + Enter")).toEqual(["Ctrl + Enter", "⌘⏎"]);
-    expect(texts("Ctrl + Space")).toEqual(["Ctrl + Space", "⌘Space"]);
+    expect(texts("Ctrl + Enter")).toEqual(["Ctrl + Enter", "⌃⏎"]);
+    expect(texts("Ctrl + Space")).toEqual(["Ctrl + Space", "⌃Space"]);
   });
   it("brackets Windows keys and uses the Windows key character", () => {
     expect(windowsResultText(parseCombo("Ctrl + C"))).toBe("[Ctrl]+[C]");
@@ -74,14 +76,14 @@ describe("text output", () => {
     expect(windowsResultText(parseCombo("Ctrl + Space"))).toBe("[Ctrl]+[Space]");
   });
   it("joins both on one line", () => {
-    expect(bothToText(parseCombo("Ctrl + C"))).toBe("Windows: [Ctrl]+[C], Mac: ⌘C");
+    expect(bothToText(parseCombo("Ctrl + C"))).toBe("Windows: [Ctrl]+[C], Mac: ⌃C");
   });
 });
 
 describe("buildFlatImage", () => {
   const style = spec("C").style;
   const flat = (text: string, platform: "windows" | "mac", plus = true, height = 32) =>
-    buildFlatImage(keysFor(parseCombo(text), platform), platform, font, style, plus, height);
+    buildFlatImage(parseCombo(text), platform, font, style, plus, height);
   it("matches the requested height and has no live text", () => {
     const image = flat("Ctrl + Shift + Z", "windows");
     expect(image.height).toBe(32);
