@@ -12,6 +12,8 @@ import { encodeApng, encodeGif, pngBlob, rasterize, type Frame } from "./raster"
 import notices from "./notices.txt?raw";
 import "./styles.css";
 
+type Display = "both" | Platform;
+
 interface Theme {
   name: string;
   cap: string;
@@ -52,6 +54,7 @@ const initial = {
   fps: 30,
   scale: 4,
   inlineHeight: 32,
+  display: "both" as Display,
 };
 
 type State = typeof initial;
@@ -176,6 +179,7 @@ function sceneSpec(platform: Platform = state.platform): SceneSpec {
 const motion = (): Motion => ({ travel: state.travel, stagger: state.stagger, hold: state.hold, pause: state.pause });
 
 const PLATFORMS: Platform[] = ["windows", "mac"];
+const isShown = (platform: Platform) => state.display === "both" || state.display === platform;
 const stage = el("div", { class: "stage", tabindex: "0", role: "img" });
 const emptyNote = el("p", { class: "empty" }, t.empty);
 const views = PLATFORMS.map((platform) => {
@@ -217,13 +221,17 @@ function draw() {
   const empty = keys.length === 0;
   emptyNote.hidden = !empty;
   views.forEach((view) => {
-    view.pane.hidden = empty;
+    view.pane.hidden = empty || !isShown(view.platform);
   });
-  for (const platform of PLATFORMS) flatPreviews[platform].innerHTML = empty ? "" : flatImage(platform).svg;
+  for (const platform of PLATFORMS) {
+    if (isShown(platform)) flatPreviews[platform].innerHTML = empty ? "" : flatImage(platform).svg;
+  }
   if (empty) return;
   const press = playing ? pressStates(motion(), keys.length, (performance.now() - playStart) % duration(motion(), keys.length)) : [];
-  for (const view of views) view.image.innerHTML = buildScene(sceneSpec(view.platform), font, press).svg;
-  stage.setAttribute("aria-label", bothToText(keys));
+  for (const view of views) {
+    if (isShown(view.platform)) view.image.innerHTML = buildScene(sceneSpec(view.platform), font, press).svg;
+  }
+  stage.setAttribute("aria-label", state.display === "both" ? bothToText(keys) : state.display === "windows" ? windowsText.value : macText.value);
 }
 
 function setPlaying(next: boolean) {
@@ -553,12 +561,23 @@ function build() {
     bgSwatch.hidden = state.transparent;
   });
 
+  const targetChoice = segmented<Platform>(t.platform, [["windows", t.windows], ["mac", t.mac]], () => state.platform, (platform) => update({ platform }));
+  const copyBothButton = el("button", { type: "button", class: "key", click: () => actions.copyText(() => bothToText(keys)) }, t.copyBoth);
+  syncers.push(() => {
+    targetChoice.hidden = state.display !== "both";
+    copyBothButton.hidden = state.display !== "both";
+    for (const view of views) view.pane.querySelector<HTMLElement>(".pane-chip")!.hidden = state.display !== "both";
+  });
+
   const inspector = el(
     "aside",
     { class: "inspector" },
     section(
       t.keycap,
-      segmented<Platform>(t.platform, [["windows", t.windows], ["mac", t.mac]], () => state.platform, (platform) => update({ platform })),
+      segmented<Display>(t.display, [["both", t.displayAll], ["windows", t.windows], ["mac", t.mac]], () => state.display, (display) =>
+        update(display === "both" ? { display } : { display, platform: display }),
+      ),
+      targetChoice,
       segmented<Profile>(t.profile, [["sculpted", t.sculpted], ["low", t.low]], () => state.profile, (profile) => update({ profile })),
       el("div", { class: "row" }, el("span", {}, t.theme), themeButtons()),
       el("div", { class: "swatches" }, color(t.capColor, "cap"), color(t.modColor, "modifier"), color(t.legendColor, "legend"), color(t.accentColor, "accent")),
@@ -603,7 +622,7 @@ function build() {
       { class: "text-results", role: "group", "aria-label": t.textResult },
       ...PLATFORMS.map((platform) => {
         const field = platform === "windows" ? windowsText : macText;
-        return el(
+        const row = el(
           "div",
           { class: "result-row" },
           el("span", { class: "result-name" }, t[platform]),
@@ -613,12 +632,16 @@ function build() {
           el("button", { type: "button", class: "key", click: () => actions.copyFlat(platform) }, t.copyPng),
           el("button", { type: "button", class: "key", click: () => actions.saveFlat(platform) }, t.savePng),
         );
+        syncers.push(() => {
+          row.hidden = !isShown(platform);
+        });
+        return row;
       }),
       el(
         "div",
         { class: "result-row" },
         slider(t.inlineHeight, "inlineHeight", 16, 96, 4, "px"),
-        el("button", { type: "button", class: "key", click: () => actions.copyText(() => bothToText(keys)) }, t.copyBoth),
+        copyBothButton,
       ),
     ),
     el(
