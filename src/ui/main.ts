@@ -5,7 +5,7 @@ import { buildFlatImage } from "../core/flat";
 import { bothToText, codeFromEvent, comboToText, isModifier, legendFor, macComboToText, parseCombo, windowsResultText, type KeyRef, type Platform } from "../core/keys";
 import { layoutKeys, type LayoutId } from "../core/layouts";
 import type { Profile } from "../core/mesh";
-import { buildScene, type SceneSpec } from "../core/scene";
+import { buildScene, scaleWithin, type SceneSpec } from "../core/scene";
 import { t, type Strings } from "./i18n";
 import { copyImage, copyText, saveFile } from "./native";
 import { encodeApng, encodeGif, pngBlob, rasterize, type Frame } from "./raster";
@@ -476,7 +476,8 @@ const actions = {
   copyPng: () =>
     guarded(async () => {
       const scene = buildScene(sceneSpec(), font!);
-      const raster = await rasterize(scene.svg, scene.width, scene.height, state.scale);
+      const scale = state.scope === "full" ? scaleWithin(scene.width, scene.height, state.scale, 1920, 1080) : state.scale;
+      const raster = await rasterize(scene.svg, scene.width, scene.height, scale);
       await copyImage(raster.rgba, raster.width, raster.height, await pngBlob(raster.canvas));
       return t.copied;
     }),

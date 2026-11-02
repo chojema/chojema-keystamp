@@ -5,7 +5,7 @@ import { animatedSvg, duration, pressAt } from "./animation";
 import { buildFlatImage } from "./flat";
 import { bothToText, codeFromEvent, comboToText, macComboToText, parseCombo, windowsResultText } from "./keys";
 import { layoutKeys } from "./layouts";
-import { buildScene, type SceneSpec } from "./scene";
+import { buildScene, scaleWithin, type SceneSpec } from "./scene";
 
 const file = readFileSync("node_modules/pretendard/dist/web/static/woff/Pretendard-SemiBold.woff");
 const font = parse(file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength) as ArrayBuffer);
@@ -217,6 +217,22 @@ describe("buildScene", () => {
   it("falls back to a row for labels not on the layout", () => {
     const context = spec("저장", { context: { enabled: true, layout: "ansi", reach: 1.5, blur: 6 } });
     expect(buildScene(context, font).svg).not.toContain("ks-mask");
+  });
+});
+
+describe("scaleWithin", () => {
+  const size = (w: number, h: number, wanted: number) => {
+    const s = scaleWithin(w, h, wanted, 1920, 1080);
+    return [Math.round(w * s), Math.round(h * s)];
+  };
+  it("fits wide and tall images in the box, keeping their shape", () => {
+    expect(size(2500, 800, 4)).toEqual([1920, 614]);
+    expect(size(1000, 2000, 4)).toEqual([540, 1080]);
+    expect(size(3840, 2160, 1)).toEqual([1920, 1080]);
+  });
+  it("does not enlarge past the wanted scale", () => {
+    expect(size(400, 200, 1)).toEqual([400, 200]);
+    expect(size(400, 200, 2)).toEqual([800, 400]);
   });
 });
 

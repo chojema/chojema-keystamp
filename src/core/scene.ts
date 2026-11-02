@@ -586,6 +586,11 @@ export function buildScene(spec: SceneSpec, font: Font, press: number[] = []): R
   return { svg, width, height, defs, backdrop, foreground, caps, viewBox };
 }
 
+/** The scale that keeps an image inside a box, never going above the wanted scale. */
+export function scaleWithin(width: number, height: number, wanted: number, maxWidth: number, maxHeight: number): number {
+  return Math.min(wanted, maxWidth / width, maxHeight / height);
+}
+
 export function openSvg(viewBox: number[], width: number, height: number): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${viewBox.map(fmt).join(" ")}" stroke-width=".5" stroke-linejoin="round">`;
 }
