@@ -23,13 +23,17 @@ function darken(hex: string, amount: number): string {
 
 const n = (value: number) => String(Math.round(value * 100) / 100);
 
-/** The Windows key symbol, which the bundled font does not include. */
-function windowsSymbol(cx: number, cy: number, ink: string): string {
-  const s = 21;
-  return (
-    `<rect x="${n(cx - s)}" y="${n(cy - s)}" width="${s * 2}" height="${s * 2}" rx="3" fill="none" stroke="${ink}" stroke-width="5.5"/>` +
-    `<path d="M${n(cx)} ${n(cy - s)}V${n(cy + s)}M${n(cx - s)} ${n(cy)}H${n(cx + s)}" fill="none" stroke="${ink}" stroke-width="5.5"/>`
-  );
+/** The four-pane Windows logo. */
+function windowsLogo(cx: number, cy: number, ink: string): string {
+  const pane = 19;
+  const gap = 3;
+  let out = "";
+  for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+    const x = sx < 0 ? cx - gap / 2 - pane : cx + gap / 2;
+    const y = sy < 0 ? cy - gap / 2 - pane : cy + gap / 2;
+    out += `<rect x="${n(x)}" y="${n(y)}" width="${pane}" height="${pane}" fill="${ink}"/>`;
+  }
+  return out;
 }
 
 function labelOf(code: string, platform: Platform): string {
@@ -64,7 +68,7 @@ export function buildFlatImage(keys: KeyRef[], platform: Platform, font: Font, s
     const cx = x + part.width / 2;
     const cy = MARGIN + FACE_HEIGHT / 2;
     if (part.windowsKey) {
-      body += windowsSymbol(cx, cy, style.legend);
+      body += windowsLogo(cx, cy, style.legend);
     } else {
       const textX = cx - (part.box.x1 + part.box.x2) / 2;
       const textY = cy - (part.box.y1 + part.box.y2) / 2;

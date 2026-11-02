@@ -62,6 +62,9 @@ describe("text output", () => {
     expect(texts("Ctrl + Alt + Delete")).toEqual(["Ctrl + Alt + Delete", "⌃⌥⌦"]);
     expect(texts("Win + E")).toEqual(["Win + E", "⌘E"]);
   });
+  it("keeps the Win word in the input field text", () => {
+    expect(comboToText(parseCombo("Win + E"))).toBe("Win + E");
+  });
   it("handles single keys and named keys", () => {
     expect(texts("C")).toEqual(["C", "C"]);
     expect(texts("Ctrl + Enter")).toEqual(["Ctrl + Enter", "⌃⏎"]);
@@ -95,9 +98,10 @@ describe("buildFlatImage", () => {
     expect(flat("C", "windows").width).toBeLessThanOrEqual(34);
     expect(flat("Ctrl + C", "windows").width).toBeGreaterThan(flat("C", "windows").width * 2);
   });
-  it("draws the Windows key symbol only on Windows", () => {
-    expect(flat("Win + E", "windows").svg).toContain('stroke-width="5.5"');
-    expect(flat("Win + E", "mac").svg).not.toContain('stroke-width="5.5"');
+  it("draws the four-pane Windows logo only on Windows", () => {
+    const rects = (svg: string) => (svg.match(/<rect /g) ?? []).length;
+    expect(rects(flat("Win", "windows").svg)).toBe(6);
+    expect(rects(flat("Win", "mac").svg)).toBe(2);
   });
   it("leaves out the plus when asked", () => {
     expect(flat("Ctrl + C", "windows", false).width).toBeLessThan(flat("Ctrl + C", "windows", true).width);
@@ -141,6 +145,17 @@ describe("buildScene", () => {
   it.each([0, 30, 45, 60])("renders at %d degrees", (tilt) => {
     const { svg } = buildScene(spec("Ctrl + Shift + Z", { view: { tilt, yaw: 0, perspective: 0 } }), font);
     expect(svg).not.toMatch(/NaN|Infinity/);
+  });
+  it("draws the Windows logo on the Win key instead of text", () => {
+    const legendPath = (platform: "windows" | "mac", code: string) => {
+      const { svg } = buildScene(spec(code, { platform, keys: [{ code: "lmeta" }] }), font);
+      return svg.match(/fill="#22272b" d="([^"]+)"/g) ?? [];
+    };
+    const logo = legendPath("windows", "Win");
+    expect(logo).toHaveLength(1);
+    expect((logo[0]!.match(/M/g) ?? []).length).toBe(4);
+    expect(logo[0]!).not.toMatch(/[QC]/);
+    expect(legendPath("mac", "Win").length).toBeGreaterThan(1);
   });
   it("keeps the frame size while a key is pressed", () => {
     const rest = buildScene(spec("C"), font);

@@ -11,6 +11,8 @@ export interface Legend {
   shift?: string;
   /** Small word under a symbol, such as "command". */
   word?: string;
+  /** Draw the four-pane Windows logo instead of the main text. */
+  windowsLogo?: boolean;
   /** Hangul jamo printed in the lower-right corner. */
   jamo?: string;
 }
@@ -67,7 +69,8 @@ export function legendFor(code: string, platform: Platform, jamo: boolean): Lege
   const mod = modifierOf(code);
   if (mod) {
     const m = MODIFIERS[mod];
-    return platform === "mac" ? { main: m.symbol, word: m.word } : { main: m.win };
+    if (platform === "mac") return { main: m.symbol, word: m.word };
+    return { main: m.win, windowsLogo: mod === "meta" };
   }
   if (SHIFTED[code]) return { main: SHIFTED[code][0], shift: SHIFTED[code][1] };
   if (/^[a-z]$/.test(code)) return { main: code.toUpperCase(), jamo: jamo ? JAMO[code] : undefined };
