@@ -277,7 +277,7 @@ function glyphPath(font: Font, text: string, size: number, toScreen: (x: number,
 }
 
 function legendPaths(font: Font, legend: Legend, mesh: CapMesh, camera: Camera, dz: number, ink: string): string {
-  const place = (text: string, wanted: number, align: "center" | "right", fx: number, fy: number, opacity = 1): string => {
+  const place = (text: string, wanted: number, align: "center" | "left" | "right", fx: number, fy: number, opacity = 1): string => {
     if (!text) return "";
     const first = font.getPath(text, 0, 0, wanted).getBoundingBox();
     const size = wanted * Math.min(1, mesh.legendW / Math.max(first.x2 - first.x1, 1));
@@ -285,7 +285,7 @@ function legendPaths(font: Font, legend: Legend, mesh: CapMesh, camera: Camera, 
     const width = box.x2 - box.x1;
     const anchorX = mesh.cx + fx * mesh.legendW;
     const anchorY = mesh.cy + fy * mesh.legendD;
-    const ox = (align === "center" ? anchorX - width / 2 : anchorX - width) - box.x1;
+    const ox = (align === "center" ? anchorX - width / 2 : align === "left" ? anchorX : anchorX - width) - box.x1;
     const oy = anchorY - (box.y1 + box.y2) / 2;
     const d = glyphPath(font, text, size, (x, y) => {
       const wx = x + ox;
@@ -316,8 +316,15 @@ function legendPaths(font: Font, legend: Legend, mesh: CapMesh, camera: Camera, 
   if (legend.shift) return place(legend.shift, min * 0.36, "center", 0, -0.25) + place(legend.main, min * 0.36, "center", 0, 0.25);
   const chars = [...legend.main].length;
   const size = chars <= 1 ? min * 0.62 : chars <= 3 ? min * 0.38 : min * 0.27;
-  const main = place(legend.main, size, "center", 0, legend.jamo ? -0.07 : 0);
-  return main + (legend.jamo ? place(legend.jamo, min * 0.3, "right", 0.5, 0.36, 0.8) : "");
+  if (legend.jamo) {
+    // Windows reads top left to bottom right; Mac mirrors it, with the letter top right.
+    const mac = legend.platform === "mac";
+    return (
+      place(legend.main, min * 0.42, mac ? "right" : "left", mac ? 0.46 : -0.46, -0.25) +
+      place(legend.jamo, min * 0.36, mac ? "left" : "right", mac ? -0.46 : 0.46, 0.27, 0.8)
+    );
+  }
+  return place(legend.main, size, "center", 0, 0);
 }
 
 /* scene */

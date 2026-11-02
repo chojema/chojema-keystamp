@@ -157,6 +157,31 @@ describe("buildScene", () => {
     expect(logo[0]!).not.toMatch(/[QC]/);
     expect(legendPath("mac", "Win").length).toBeGreaterThan(1);
   });
+  it("places the letter and jamo in the corners each platform uses", () => {
+    const centre = (d: string) => {
+      const values = (d.match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
+      const xs = values.filter((_, i) => i % 2 === 0);
+      const ys = values.filter((_, i) => i % 2 === 1);
+      return [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2] as const;
+    };
+    const place = (platform: "windows" | "mac") => {
+      const base = spec("C");
+      const { svg } = buildScene({ ...base, platform, view: { tilt: 0, yaw: 0, perspective: 0 }, style: { ...base.style, jamo: true } }, font);
+      const letter = /fill="#22272b" d="([^"]+)"/.exec(svg)![1]!;
+      const jamo = /fill="#22272b" fill-opacity="[^"]+" d="([^"]+)"/.exec(svg)![1]!;
+      return { letter: centre(letter), jamo: centre(jamo) };
+    };
+    const windows = place("windows");
+    expect(windows.letter[0]).toBeLessThan(0);
+    expect(windows.letter[1]).toBeLessThan(0);
+    expect(windows.jamo[0]).toBeGreaterThan(0);
+    expect(windows.jamo[1]).toBeGreaterThan(0);
+    const mac = place("mac");
+    expect(mac.letter[0]).toBeGreaterThan(0);
+    expect(mac.letter[1]).toBeLessThan(0);
+    expect(mac.jamo[0]).toBeLessThan(0);
+    expect(mac.jamo[1]).toBeGreaterThan(0);
+  });
   it("keeps the frame size while a key is pressed", () => {
     const rest = buildScene(spec("C"), font);
     const pressed = buildScene(spec("C"), font, [1]);
