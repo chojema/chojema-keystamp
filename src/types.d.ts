@@ -32,6 +32,7 @@ declare module "opentype.js" {
     getPath(text: string, x: number, y: number, size: number): {
       commands: PathCommand[];
       getBoundingBox(): { x1: number; y1: number; x2: number; y2: number };
+      toPathData(decimalPlaces?: number): string;
     };
   }
   export function parse(buffer: ArrayBuffer): Font;

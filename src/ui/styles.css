@@ -165,15 +165,19 @@ button, input { font: inherit; color: inherit; }
 }
 .pane-chip[aria-pressed="true"] { background: var(--signal); color: var(--signal-ink); }
 .text-results {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto minmax(0, 1fr) auto auto;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
   padding: 12px 16px 14px;
   border-top: 1px solid var(--plate-edge);
 }
-.text-results span { color: var(--ink-soft); }
-.text-results input {
+.result-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.result-name { width: 58px; color: var(--ink-soft); }
+.result-row .slider { flex: 1 1 260px; min-width: 220px; grid-template-columns: 110px 1fr 50px; }
+.flat-preview { flex: 0 1 auto; min-width: 0; max-width: 240px; overflow: hidden; }
+.flat-preview svg { display: block; max-width: 100%; height: auto; }
+.text-results input[type="text"] {
+  flex: 1 1 150px;
   min-width: 0;
   height: 32px;
   padding: 0 10px;
@@ -261,8 +265,6 @@ input[type="range"] { width: 100%; min-width: 0; accent-color: var(--signal); }
   body { overflow: auto; height: auto; }
   .columns { flex-direction: column; }
   .stage { min-height: 560px; grid-template-columns: 1fr; }
-  .text-results { grid-template-columns: auto minmax(0, 1fr) auto; }
-  .copy-both { grid-column: 1 / -1; }
   .inspector { width: 100%; border-left: 0; }
   .entry { flex-wrap: wrap; }
   .key-input { flex-basis: 100%; }

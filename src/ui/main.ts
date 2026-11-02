@@ -1,7 +1,8 @@
 import { parse, type Font } from "opentype.js";
 import fontUrl from "pretendard/dist/web/static/woff/Pretendard-SemiBold.woff?url";
 import { animatedHtml, duration, pressStates, type Motion } from "../core/animation";
-import { bothToText, codeFromEvent, comboToText, counterpartCode, isModifier, keysFor, legendFor, macComboToText, parseCombo, type KeyRef, type Platform } from "../core/keys";
+import { buildFlatImage } from "../core/flat";
+import { bothToText, codeFromEvent, comboToText, counterpartCode, isModifier, keysFor, legendFor, macComboToText, parseCombo, windowsResultText, type KeyRef, type Platform } from "../core/keys";
 import { layoutKeys, type LayoutId } from "../core/layouts";
 import type { Profile } from "../core/mesh";
 import { buildScene, type SceneSpec } from "../core/scene";
@@ -50,6 +51,7 @@ const initial = {
   pause: 700,
   fps: 30,
   scale: 4,
+  inlineHeight: 32,
 };
 
 type State = typeof initial;
@@ -199,8 +201,17 @@ stage.append(emptyNote);
 const windowsText = el("input", { type: "text", readonly: "", "aria-label": `${t.windows} ${t.textResult}` });
 const macText = el("input", { type: "text", readonly: "", "aria-label": `${t.mac} ${t.textResult}` });
 
+const flatPreviews: Record<Platform, HTMLElement> = {
+  windows: el("div", { class: "flat-preview" }),
+  mac: el("div", { class: "flat-preview" }),
+};
+
+function flatImage(platform: Platform) {
+  return buildFlatImage(keysFor(keys, platform), platform, font!, sceneSpec(platform).style, state.showPlus, state.inlineHeight);
+}
+
 function draw() {
-  windowsText.value = comboToText(keys);
+  windowsText.value = windowsResultText(keys);
   macText.value = macComboToText(keysFor(keys, "mac"));
   if (!font) return;
   const empty = keys.length === 0;
@@ -208,6 +219,7 @@ function draw() {
   views.forEach((view) => {
     view.pane.hidden = empty;
   });
+  for (const platform of PLATFORMS) flatPreviews[platform].innerHTML = empty ? "" : flatImage(platform).svg;
   if (empty) return;
   const press = playing ? pressStates(motion(), keys.length, (performance.now() - playStart) % duration(motion(), keys.length)) : [];
   for (const view of views) view.image.innerHTML = buildScene(sceneSpec(view.platform), font, press).svg;
@@ -377,9 +389,9 @@ function say(message: string, sticky = false) {
   if (!sticky) statusTimer = window.setTimeout(() => (status.textContent = ""), 3000);
 }
 
-function fileBase(): string {
+function fileBase(platform: Platform = state.platform): string {
   const text = comboToText(keys).replace(/\s*\+\s*/g, "-").replace(/[\\/:*?"<>|]/g, "_");
-  return `keystamp-${text || "key"}-${state.platform}`;
+  return `keystamp-${text || "key"}-${platform}`;
 }
 
 async function guarded(action: () => Promise<string | null>) {
@@ -426,6 +438,20 @@ const actions = {
       const raster = await rasterize(scene.svg, scene.width, scene.height, state.scale);
       const blob = await pngBlob(raster.canvas);
       return save(`${fileBase()}.png`, new Uint8Array(await blob.arrayBuffer()));
+    }),
+  copyFlat: (platform: Platform) =>
+    guarded(async () => {
+      const image = flatImage(platform);
+      const raster = await rasterize(image.svg, image.width, image.height, 1);
+      await copyImage(raster.rgba, raster.width, raster.height, await pngBlob(raster.canvas));
+      return t.copied;
+    }),
+  saveFlat: (platform: Platform) =>
+    guarded(async () => {
+      const image = flatImage(platform);
+      const raster = await rasterize(image.svg, image.width, image.height, 1);
+      const blob = await pngBlob(raster.canvas);
+      return save(`${fileBase(platform)}-2d.png`, new Uint8Array(await blob.arrayBuffer()));
     }),
   saveSvg: () => guarded(() => save(`${fileBase()}.svg`, encoder.encode(buildScene(sceneSpec(), font!).svg))),
   copyPng: () =>
@@ -583,13 +609,25 @@ function build() {
     el(
       "div",
       { class: "text-results", role: "group", "aria-label": t.textResult },
-      el("span", {}, t.windows),
-      windowsText,
-      el("button", { type: "button", class: "key", click: () => actions.copyText(() => windowsText.value) }, t.copy),
-      el("span", {}, t.mac),
-      macText,
-      el("button", { type: "button", class: "key", click: () => actions.copyText(() => macText.value) }, t.copy),
-      el("button", { type: "button", class: "key copy-both", click: () => actions.copyText(() => bothToText(keys)) }, t.copyBoth),
+      ...PLATFORMS.map((platform) => {
+        const field = platform === "windows" ? windowsText : macText;
+        return el(
+          "div",
+          { class: "result-row" },
+          el("span", { class: "result-name" }, t[platform]),
+          field,
+          el("button", { type: "button", class: "key", click: () => actions.copyText(() => field.value) }, t.copy),
+          flatPreviews[platform],
+          el("button", { type: "button", class: "key", click: () => actions.copyFlat(platform) }, t.copyPng),
+          el("button", { type: "button", class: "key", click: () => actions.saveFlat(platform) }, t.savePng),
+        );
+      }),
+      el(
+        "div",
+        { class: "result-row" },
+        slider(t.inlineHeight, "inlineHeight", 16, 96, 4, "px"),
+        el("button", { type: "button", class: "key", click: () => actions.copyText(() => bothToText(keys)) }, t.copyBoth),
+      ),
     ),
     el(
       "div",

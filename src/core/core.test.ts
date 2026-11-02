@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import { parse } from "opentype.js";
 import { describe, expect, it } from "vitest";
 import { animatedSvg, duration, pressAt } from "./animation";
-import { bothToText, codeFromEvent, comboToText, keysFor, macComboToText, parseCombo } from "./keys";
+import { buildFlatImage } from "./flat";
+import { bothToText, codeFromEvent, comboToText, keysFor, macComboToText, parseCombo, windowsResultText } from "./keys";
 import { layoutKeys } from "./layouts";
 import { buildScene, type SceneSpec } from "./scene";
 
@@ -64,8 +65,40 @@ describe("text output", () => {
     expect(texts("Ctrl + Enter")).toEqual(["Ctrl + Enter", "⌘⏎"]);
     expect(texts("Ctrl + Space")).toEqual(["Ctrl + Space", "⌘Space"]);
   });
+  it("brackets Windows keys and uses the Windows key character", () => {
+    expect(windowsResultText(parseCombo("Ctrl + C"))).toBe("[Ctrl]+[C]");
+    expect(windowsResultText(parseCombo("Ctrl + Shift + Z"))).toBe("[Ctrl]+[Shift]+[Z]");
+    expect(windowsResultText(parseCombo("Win + E"))).toBe("⊞+[E]");
+    expect(windowsResultText(parseCombo("⊞ + E"))).toBe("⊞+[E]");
+    expect(windowsResultText(parseCombo("C"))).toBe("[C]");
+    expect(windowsResultText(parseCombo("Ctrl + Space"))).toBe("[Ctrl]+[Space]");
+  });
   it("joins both on one line", () => {
-    expect(bothToText(parseCombo("Ctrl + C"))).toBe("Windows: Ctrl + C, Mac: ⌘C");
+    expect(bothToText(parseCombo("Ctrl + C"))).toBe("Windows: [Ctrl]+[C], Mac: ⌘C");
+  });
+});
+
+describe("buildFlatImage", () => {
+  const style = spec("C").style;
+  const flat = (text: string, platform: "windows" | "mac", plus = true, height = 32) =>
+    buildFlatImage(keysFor(parseCombo(text), platform), platform, font, style, plus, height);
+  it("matches the requested height and has no live text", () => {
+    const image = flat("Ctrl + Shift + Z", "windows");
+    expect(image.height).toBe(32);
+    expect(image.svg).not.toContain("<text");
+    expect(image.svg).not.toMatch(/NaN|Infinity/);
+    expect(flat("C", "windows", true, 96).height).toBe(96);
+  });
+  it("is square-ish for one key and wider for a combination", () => {
+    expect(flat("C", "windows").width).toBeLessThanOrEqual(34);
+    expect(flat("Ctrl + C", "windows").width).toBeGreaterThan(flat("C", "windows").width * 2);
+  });
+  it("draws the Windows key symbol only on Windows", () => {
+    expect(flat("Win + E", "windows").svg).toContain('stroke-width="5.5"');
+    expect(flat("Win + E", "mac").svg).not.toContain('stroke-width="5.5"');
+  });
+  it("leaves out the plus when asked", () => {
+    expect(flat("Ctrl + C", "windows", false).width).toBeLessThan(flat("Ctrl + C", "windows", true).width);
   });
 });
 

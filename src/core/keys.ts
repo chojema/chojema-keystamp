@@ -98,7 +98,7 @@ const ALIASES: Record<string, string> = {
   "⌃": "lmeta", "^": "lmeta",
   shift: "lshift", "⇧": "lshift", 시프트: "lshift", lshift: "lshift", rshift: "rshift",
   alt: "lalt", option: "lalt", opt: "lalt", "⌥": "lalt", 알트: "lalt", lalt: "lalt", ralt: "ralt",
-  win: "lmeta", windows: "lmeta", meta: "lmeta", super: "lmeta", lmeta: "lmeta", rmeta: "rmeta",
+  win: "lmeta", windows: "lmeta", "⊞": "lmeta", meta: "lmeta", super: "lmeta", lmeta: "lmeta", rmeta: "rmeta",
   // Keys are stored by their Windows role, so the Mac command key is Ctrl's counterpart.
   cmd: "lctrl", command: "lctrl", "⌘": "lctrl",
   esc: "esc", escape: "esc", tab: "tab", "⇥": "tab", caps: "capslock", capslock: "capslock", "⇪": "capslock",
@@ -208,7 +208,22 @@ export function macComboToText(keys: KeyRef[]): string {
   return modifiers + rest;
 }
 
+/** The Windows key has its own character. Every other key is bracketed, such as "[Ctrl]+[C]". */
+export const WINDOWS_KEY_CHARACTER = "⊞";
+
+export function windowsResultText(keys: KeyRef[]): string {
+  return keys
+    .map(({ code }) => {
+      const mod = modifierOf(code);
+      if (mod === "meta") return WINDOWS_KEY_CHARACTER;
+      if (mod) return `[${MODIFIERS[mod].win}]`;
+      if (code === "space") return "[Space]";
+      return `[${legendFor(code, "windows", false).main}]`;
+    })
+    .join("+");
+}
+
 /** Both platforms on one line, ready to paste into a sentence. */
 export function bothToText(keys: KeyRef[]): string {
-  return `Windows: ${comboToText(keys)}, Mac: ${macComboToText(keysFor(keys, "mac"))}`;
+  return `Windows: ${windowsResultText(keys)}, Mac: ${macComboToText(keysFor(keys, "mac"))}`;
 }
